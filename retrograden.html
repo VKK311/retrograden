@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05050f">
+<title>Ретрограден — Космосът има мнение</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Реални астрономически изчисления (ретроградни планети, лунна фаза/знак) — Astronomy Engine, отворен код -->
+<script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js"></script>
+<style>
+/* ============================================================
+   РЕТРОГРАДЕН · v0.1 · Кинематографична космическа система
+   Палитра: Void #05050F · Midnight #0A0E2A · Nebula #6A3DF5
+            Acid #C6FF4A · Cyan #5CE1FF · Starlight #EEF0FF
+   ============================================================ */
+:root{
+  --void:#05050f;
+  --midnight:#0a0e2a;
+  --nebula:#6a3df5;
+  --acid:#c6ff4a;
+  --cyan:#5ce1ff;
+  --text:#eef0ff;
+  --muted:rgba(238,240,255,.62);
+  --muted2:rgba(238,240,255,.42);
+  --glass:rgba(255,255,255,.055);
+  --glass-hi:rgba(255,255,255,.09);
+  --line:rgba(255,255,255,.11);
+  --font-display:"Unbounded", system-ui, sans-serif;
+  --font-body:"Manrope", system-ui, sans-serif;
+  color-scheme: dark;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-body);
+  color:var(--text);
+  min-height:100dvh;
+  overflow-x:hidden;
+  background:
+    radial-gradient(1100px 750px at 85% -12%, rgba(74,32,140,.38), transparent 62%),
+    radial-gradient(950px 700px at -12% 104%, rgba(18,58,150,.32), transparent 62%),
+    linear-gradient(180deg, #06061a 0%, var(--void) 45%, #04040c 100%);
+}
+::selection{background:rgba(198,255,74,.35)}
+
+/* ---------- Космическа сцена (фон) ---------- */
+#cosmos{position:fixed;inset:0;z-index:0;pointer-events:none}
+.nebula{position:fixed;border-radius:50%;filter:blur(90px);mix-blend-mode:screen;pointer-events:none;z-index:1}
+.n1{width:64vmax;height:64vmax;top:-24vmax;left:-18vmax;opacity:.55;
+    background:radial-gradient(circle at 35% 35%, rgba(122,64,255,.55), rgba(58,20,140,.22) 45%, transparent 70%);
+    animation:drift1 52s ease-in-out infinite alternate}
+.n2{width:58vmax;height:58vmax;bottom:-26vmax;right:-20vmax;opacity:.5;
+    background:radial-gradient(circle at 60% 60%, rgba(46,120,255,.5), rgba(20,50,140,.2) 48%, transparent 72%);
+    animation:drift2 64s ease-in-out infinite alternate}
+.n3{width:34vmax;height:34vmax;top:38%;left:52%;opacity:.28;
+    background:radial-gradient(circle, rgba(198,255,74,.35), transparent 65%);
+    animation:drift3 46s ease-in-out infinite alternate}
+@keyframes drift1{from{transform:translate(0,0) scale(1)}to{transform:translate(7vmax,5vmax) scale(1.12)}}
+@keyframes drift2{from{transform:translate(0,0) scale(1.08)}to{transform:translate(-6vmax,-7vmax) scale(1)}}
+@keyframes drift3{from{transform:translate(0,0)}to{transform:translate(-9vmax,6vmax) scale(1.25)}}
+
+/* ---------- Каркас на приложението ---------- */
+.app{position:relative;z-index:2;max-width:430px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column}
+.topbar{padding:30px 18px 12px;text-align:center}
+.logo{
+  font-family:var(--font-display);font-weight:800;font-size:25px;letter-spacing:.14em;
+  background:linear-gradient(92deg,var(--cyan) 0%, #9df0ff 35%, var(--acid) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 16px rgba(92,225,255,.45));
+  display:inline-flex;align-items:center;gap:8px;
+}
+.logo-star{font-size:15px;color:var(--acid);-webkit-text-fill-color:var(--acid);animation:pulseStar 2.6s ease-in-out infinite}
+@keyframes pulseStar{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.15)}}
+.tagline{margin-top:7px;font-size:12.5px;letter-spacing:.04em;color:var(--muted2)}
+main{flex:1;padding:6px 16px 136px}
+.foot{padding:0 24px 128px;text-align:center;font-size:11px;line-height:1.6;color:var(--muted2)}
+
+/* ---------- Стъклени карти ---------- */
+.glass{
+  background:linear-gradient(165deg, var(--glass-hi), var(--glass) 55%);
+  border:1px solid var(--line);
+  border-radius:24px;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:0 24px 60px rgba(2,2,12,.55), inset 0 1px 0 rgba(255,255,255,.09);
+}
+.card{padding:20px 18px;margin-bottom:14px}
+.card-label{
+  font-family:var(--font-display);font-weight:600;font-size:10.5px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+  display:flex;align-items:center;gap:9px;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--acid);box-shadow:0 0 10px var(--acid);flex:none}
+.dot.cyan{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.dot.violet{background:#a985ff;box-shadow:0 0 10px #a985ff}
+.card-label.flag{color:#ff8aa5}
+
+/* ---------- Екрани и преходи ---------- */
+.screen{display:none}
+.screen.active{display:block;animation:rise .55s cubic-bezier(.22,.9,.3,1) both}
+.reveal{animation:rise .6s cubic-bezier(.22,.9,.3,1) both}
+.d1{animation-delay:.08s}.d2{animation-delay:.16s}.d3{animation-delay:.24s}.d4{animation-delay:.32s}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.hidden{display:none!important}
+
+.date-line{font-size:13px;color:var(--muted);margin:8px 2px 14px;letter-spacing:.02em}
+.screen-title{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:.03em;margin:10px 2px 6px;line-height:1.25}
+.grad{background:linear-gradient(92deg,var(--cyan),var(--acid));-webkit-background-clip:text;background-clip:text;color:transparent}
+.screen-sub{font-size:13.5px;color:var(--muted);margin:0 2px 16px;line-height:1.55}
+
+/* ---------- Дашборд ---------- */
+.cosmic-msg{font-size:16.5px;line-height:1.6;margin:12px 0 4px;font-weight:500}
+.ghost-btn{
+  margin-top:12px;padding:9px 15px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);
+  color:var(--muted);font:600 12.5px var(--font-body);letter-spacing:.02em;
+  transition:all .25s ease;
+}
+.ghost-btn:hover{border-color:rgba(198,255,74,.55);color:var(--acid);box-shadow:0 0 18px rgba(198,255,74,.18)}
+.ghost-btn:active{transform:scale(.97)}
+.fade-swap{transition:opacity .22s ease}
+.fade-swap.out{opacity:0}
+
+.chaos-top{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:14px 0 12px}
+.chaos-num{
+  font-family:var(--font-display);font-weight:800;font-size:36px;line-height:1;
+  background:linear-gradient(92deg,var(--cyan),var(--acid));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 16px rgba(198,255,74,.4));
+}
+.chaos-tag{font-size:12.5px;line-height:1.45;color:var(--muted);text-align:right;max-width:58%}
+.bar{position:relative;height:14px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);overflow:hidden}
+.fill{
+  position:absolute;top:0;left:0;bottom:0;width:0%;border-radius:99px;
+  background:linear-gradient(90deg,var(--cyan),var(--acid));
+  box-shadow:0 0 16px rgba(198,255,74,.6), 0 0 40px rgba(198,255,74,.28);
+  transition:width 1.5s cubic-bezier(.22,.9,.25,1);
+}
+.fill::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+  transform:translateX(-120%);animation:shimmer 2.6s ease-in-out infinite;
+}
+@keyframes shimmer{60%,100%{transform:translateX(160%)}}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.astro-source{margin-top:12px;font-size:.72rem;letter-spacing:.02em;color:rgba(238,240,255,.4);font-style:italic}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.btn-row .ghost-btn{margin-top:0}
+.city-line{margin-top:14px;font-size:.85rem;line-height:1.5;color:rgba(238,240,255,.75);min-height:0}
+.city-line.pending{color:rgba(238,240,255,.45);font-style:italic}
+.city-line.err{color:#ff8a8a}
+.chip{
+  padding:7px 13px;border-radius:999px;font-size:12px;font-weight:500;
+  border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.04);color:var(--muted);
+}
+.chip.hot{border-color:rgba(198,255,74,.5);color:var(--acid);box-shadow:0 0 14px rgba(198,255,74,.15)}
+
+/* ---------- Форми ---------- */
+.f-label{
+  display:block;font-family:var(--font-display);font-weight:600;font-size:10.5px;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:18px 2px 9px;
+}
+.card .f-label:first-child{margin-top:2px}
+.field{
+  width:100%;padding:14px 16px;border-radius:15px;color:var(--text);
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);
+  font:500 14.5px var(--font-body);outline:none;transition:border .25s, box-shadow .25s;
+}
+.field::placeholder{color:var(--muted2)}
+.field:focus{border-color:rgba(198,255,74,.6);box-shadow:0 0 0 3px rgba(198,255,74,.12), 0 0 20px rgba(198,255,74,.12)}
+select.field{
+  appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:42px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%23c6ff4a' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 15px center;
+}
+select.field option{background:#0b0d22;color:var(--text)}
+
+.checkbox-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:.82rem;line-height:1.4;color:rgba(238,240,255,.72);cursor:pointer}
+.checkbox-row input{margin-top:3px;accent-color:var(--acid);width:16px;height:16px;flex-shrink:0}
+.field-hint{margin-top:8px;font-size:.75rem;color:rgba(238,240,255,.45);font-style:italic;min-height:0}
+.field[disabled]{opacity:.4;cursor:not-allowed}
+
+
+.sign-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+.sign-btn{
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 2px 9px;
+  border-radius:15px;cursor:pointer;border:1px solid rgba(255,255,255,.11);
+  background:rgba(255,255,255,.035);transition:all .22s ease;
+}
+.sign-btn .sym{font-size:20px;line-height:1;color:var(--text)}
+.sign-btn .nm{font-size:10px;letter-spacing:.03em;color:var(--muted)}
+.sign-btn:hover{border-color:rgba(92,225,255,.5);transform:translateY(-1px)}
+.sign-btn.selected{
+  border-color:rgba(198,255,74,.7);background:rgba(198,255,74,.07);
+  box-shadow:0 0 20px rgba(198,255,74,.28), inset 0 0 14px rgba(198,255,74,.07);
+}
+.sign-btn.selected .sym,.sign-btn.selected .nm{color:var(--acid)}
+
+.btn-primary{
+  width:100%;margin-top:22px;padding:16px;border-radius:17px;cursor:pointer;
+  font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;
+  color:#eaffca;border:1px solid rgba(198,255,74,.55);
+  background:linear-gradient(135deg, rgba(92,225,255,.16), rgba(198,255,74,.2));
+  box-shadow:0 0 26px rgba(198,255,74,.2), inset 0 1px 0 rgba(255,255,255,.15);
+  transition:all .25s ease;
+}
+.btn-primary:hover{box-shadow:0 0 40px rgba(198,255,74,.42), inset 0 1px 0 rgba(255,255,255,.2);transform:translateY(-1px)}
+.btn-primary:active{transform:scale(.98)}
+
+/* ---------- Резултати: Натална карта ---------- */
+.result-heading{font-family:var(--font-display);font-weight:800;font-size:18px;letter-spacing:.03em;margin:26px 2px 6px}
+.result-summary{font-size:13px;color:var(--muted);margin:0 2px 16px;line-height:1.6}
+.rc-top{display:flex;align-items:center;gap:14px;margin-bottom:11px}
+.rc-sym{
+  width:46px;height:46px;flex:none;display:grid;place-items:center;font-size:22px;border-radius:50%;
+  color:var(--acid);border:1px solid rgba(198,255,74,.45);background:rgba(198,255,74,.06);
+  box-shadow:0 0 18px rgba(198,255,74,.22);
+}
+.rc-sym.cy{color:var(--cyan);border-color:rgba(92,225,255,.45);background:rgba(92,225,255,.06);box-shadow:0 0 18px rgba(92,225,255,.22)}
+.rc-sym.vi{color:#b79cff;border-color:rgba(169,133,255,.5);background:rgba(169,133,255,.07);box-shadow:0 0 18px rgba(169,133,255,.25)}
+.rc-label{font-family:var(--font-display);font-weight:600;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.rc-sign{font-family:var(--font-display);font-weight:600;font-size:16px;margin-top:3px}
+.rc-text{font-size:14.5px;line-height:1.62;color:rgba(238,240,255,.86)}
+.disclaimer{font-size:11px;color:var(--muted2);margin:4px 4px 10px;line-height:1.55}
+
+/* ---------- Резултати: Съвместимост ---------- */
+.loading-box{display:flex;flex-direction:column;align-items:center;gap:16px;padding:30px 18px;text-align:center}
+.orbit{position:relative;width:58px;height:58px;border-radius:50%;border:1px dashed rgba(255,255,255,.28);animation:spin 2.6s linear infinite}
+.orbit::after{content:"";position:absolute;inset:16px;border-radius:50%;border:1px dashed rgba(198,255,74,.35);animation:spinBack 3.8s linear infinite}
+.orbit-dot{position:absolute;top:-5px;left:50%;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--acid);box-shadow:0 0 14px var(--acid)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spinBack{to{transform:rotate(-360deg)}}
+#loadingText{font-size:13.5px;color:var(--muted)}
+
+.score-card{display:flex;flex-direction:column;align-items:center;padding:30px 18px 26px;text-align:center}
+.score-wrap{position:relative;width:192px;height:192px;display:grid;place-items:center}
+.score-ring{
+  position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from -90deg, var(--cyan), var(--acid) 0%, rgba(255,255,255,.07) 0%);
+  -webkit-mask:radial-gradient(closest-side, transparent 72%, #000 73%);
+  mask:radial-gradient(closest-side, transparent 72%, #000 73%);
+  filter:drop-shadow(0 0 20px rgba(198,255,74,.4));
+}
+.score-num{
+  font-family:var(--font-display);font-weight:800;font-size:42px;
+  background:linear-gradient(92deg,var(--cyan),var(--acid));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 14px rgba(92,225,255,.35));
+}
+.v-title{font-family:var(--font-display);font-weight:600;font-size:15px;letter-spacing:.05em;margin-top:22px;color:var(--acid);text-shadow:0 0 18px rgba(198,255,74,.4)}
+.v-text{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.6;max-width:32ch}
+.pair-line{font-size:12px;color:var(--muted2);margin-top:14px;letter-spacing:.04em}
+
+.flags{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:14px}
+.flags li{display:flex;gap:11px;align-items:flex-start;font-size:14px;line-height:1.58;color:rgba(238,240,255,.86)}
+.flag-ico{flex:none;filter:drop-shadow(0 0 7px rgba(255,90,130,.65));font-size:15px;margin-top:1px}
+.flags b{color:var(--acid);font-weight:700}
+.advice-text{font-size:14.5px;line-height:1.62;margin-top:11px;color:rgba(238,240,255,.88)}
+
+/* ---------- Долна навигация ---------- */
+.tabbar{
+  position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:6;
+  width:min(430px, calc(100% - 24px));display:flex;gap:6px;padding:8px;border-radius:23px;
+}
+.tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;
+  border:none;background:transparent;border-radius:16px;cursor:pointer;
+  color:var(--muted);font:600 10px var(--font-body);letter-spacing:.05em;text-transform:uppercase;
+  transition:all .25s ease;
+}
+.tab .t-ico{font-size:17px;line-height:1}
+.tab.active{
+  color:var(--acid);background:rgba(198,255,74,.08);
+  box-shadow:inset 0 0 0 1px rgba(198,255,74,.28), 0 0 20px rgba(198,255,74,.12);
+  text-shadow:0 0 12px rgba(198,255,74,.45);
+}
+
+/* ---------- Тоуст ---------- */
+.toast{
+  position:fixed;left:50%;bottom:100px;z-index:9;max-width:calc(100% - 40px);
+  transform:translateX(-50%) translateY(12px);opacity:0;pointer-events:none;
+  padding:11px 18px;border-radius:999px;text-align:center;font-size:13px;line-height:1.45;
+  color:var(--text);background:rgba(9,11,28,.92);border:1px solid rgba(198,255,74,.45);
+  box-shadow:0 0 26px rgba(198,255,74,.2), 0 14px 40px rgba(0,0,0,.5);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  transition:opacity .35s ease, transform .35s ease;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- Достъпност и движение ---------- */
+.tab:focus-visible,.btn-primary:focus-visible,.ghost-btn:focus-visible,.sign-btn:focus-visible,.field:focus-visible{
+  outline:2px solid var(--acid);outline-offset:2px;
+}
+@media (prefers-reduced-motion: reduce){
+  .nebula,.fill::after,.logo-star,.orbit,.orbit::after{animation:none!important}
+  .screen.active,.reveal{animation:none!important;opacity:1}
+  .fill{transition:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="cosmos" aria-hidden="true"></canvas>
+<div class="nebula n1" aria-hidden="true"></div>
+<div class="nebula n2" aria-hidden="true"></div>
+<div class="nebula n3" aria-hidden="true"></div>
+
+<div class="app">
+  <header class="topbar">
+    <div class="logo">РЕТРОГРАДЕН<span class="logo-star">✦</span></div>
+    <p class="tagline">Космосът те гледа. И има мнение.</p>
+  </header>
+
+  <main>
+    <!-- ================= ЕКРАН 1: ДНЕС ================= -->
+    <section id="screen-today" class="screen active">
+      <p class="date-line" id="dateLine"></p>
+
+      <article class="glass card reveal">
+        <h2 class="card-label"><span class="dot"></span>Известие от Космоса</h2>
+        <p class="cosmic-msg fade-swap" id="dailyMsg"></p>
+        <button class="ghost-btn" id="nextMsgBtn" type="button">Друго известие ↻</button>
+      </article>
+
+      <article class="glass card reveal d1">
+        <h2 class="card-label"><span class="dot cyan"></span><span id="chaosCardTitle">Ниво на хаос в България</span></h2>
+        <div class="chaos-top">
+          <span class="chaos-num" id="chaosNum">0%</span>
+          <span class="chaos-tag" id="chaosTag">Космосът калибрира сензорите…</span>
+        </div>
+        <div class="bar" role="progressbar" aria-label="Ниво на хаос" aria-valuemin="0" aria-valuemax="100" id="chaosBar">
+          <div class="fill" id="chaosFill"></div>
+        </div>
+        <p class="city-line" id="cityLine"></p>
+        <div class="btn-row">
+          <button class="ghost-btn" id="chaosBtn" type="button">Преизчисли ⚡</button>
+          <button class="ghost-btn" id="locateBtn" type="button">📍 Открий моя град</button>
+        </div>
+      </article>
+
+      <article class="glass card reveal d2">
+        <h2 class="card-label"><span class="dot violet"></span>Космическа обстановка</h2>
+        <div class="chips" id="chipsRow"></div>
+        <p class="astro-source" id="astroSource">Изчислено от реалните позиции на планетите за днес.</p>
+      </article>
+
+      <article class="glass card reveal d3 hidden" id="personalCard">
+        <h2 class="card-label"><span class="dot cyan"></span>Лично от Ретрограден</h2>
+        <div id="personalLines"></div>
+        <p class="astro-source">Спрямо твоята натална карта (Асцендент <span id="personalAsc"></span>).</p>
+        <p class="astro-source" id="personalDebug" style="opacity:.6"></p>
+      </article>
+    </section>
+
+    <!-- ================= ЕКРАН 2: КОСМИЧЕСКО ДНК ================= -->
+    <section id="screen-natal" class="screen">
+      <h1 class="screen-title">Космическо <span class="grad">ДНК</span></h1>
+      <p class="screen-sub" id="natalSub">Кажи кога и къде си се появил. Космосът ще изчисли, не гадае.</p>
+
+      <article class="glass card" id="natalForm">
+        <label class="f-label" for="natalName">Как те кръстиха?</label>
+        <input class="field" id="natalName" type="text" autocomplete="off" maxlength="30" placeholder="Име (по желание)">
+
+        <label class="f-label" for="natalDate">Дата на раждане</label>
+        <input class="field" id="natalDate" type="date">
+
+        <label class="f-label" for="natalTime">Точен час на раждане</label>
+        <input class="field" id="natalTime" type="time">
+        <label class="checkbox-row">
+          <input type="checkbox" id="natalNoTime">
+          <span>Не знам точния час — покажи каквото е сигурно, пропусни Асцендента</span>
+        </label>
+
+        <label class="f-label" for="natalCity">В кой град те остави щъркелът?</label>
+        <input class="field" id="natalCity" type="text" list="natalCityList" autocomplete="off" placeholder="Пиши, за да търсиш сред 259 града…">
+        <datalist id="natalCityList"></datalist>
+        <p class="field-hint" id="cityHint"></p>
+
+        <button class="btn-primary" id="natalBtn" type="button">Изчисли картата ✦</button>
+      </article>
+
+      <div id="natalResult" class="hidden"></div>
+      <button class="ghost-btn hidden" id="natalEditBtn" type="button" style="margin-top:14px">✎ Редактирай данните</button>
+    </section>
+
+    <!-- ================= ЕКРАН 3: СЪВМЕСТИМОСТ ================= -->
+    <section id="screen-compat" class="screen">
+      <h1 class="screen-title">Съвместимост<span class="grad">.bg</span></h1>
+      <p class="screen-sub">Двама души. Един алгоритъм. Нула милост.</p>
+
+      <article class="glass card">
+        <label class="f-label" for="compatA">Ти</label>
+        <select class="field" id="compatA"></select>
+
+        <label class="f-label" for="compatB">Другият човек</label>
+        <select class="field" id="compatB"></select>
+
+        <button class="btn-primary" id="compatBtn" type="button">Изчисли щетите ⚡</button>
+      </article>
+
+      <div id="compatLoading" class="glass card loading-box hidden">
+        <div class="orbit"><div class="orbit-dot"></div></div>
+        <p id="loadingText">Космосът се консултира със звездите…</p>
+      </div>
+
+      <div id="compatResult" class="hidden"></div>
+    </section>
+  </main>
+
+  <footer class="foot">Ретрограден v0.1 · Космосът не носи юридическа отговорност за взети решения, пратени съобщения и купени билети.</footer>
+</div>
+
+<nav class="tabbar glass" aria-label="Основна навигация">
+  <button class="tab active" data-target="screen-today" type="button"><span class="t-ico">✦</span>Днес</button>
+  <button class="tab" data-target="screen-natal" type="button"><span class="t-ico">☉</span>Космическо ДНК</button>
+  <button class="tab" data-target="screen-compat" type="button"><span class="t-ico">☍</span>Съвместимост</button>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   ДАННИ · целият тон на „Ретрограден“ живее тук
+   ============================================================ */
+const SIGNS = [
+  { name:"Овен", symbol:"♈", element:"fire", dates:"21.03 – 19.04",
+    sun:"Започваш всичко с ентусиазъм — спорта, испанския, „новия проект“. Довършваш приблизително нищо. Караш се с непознати в трафика на Цариградско и това мистериозно ти дава енергия за целия ден.",
+    moon:"Емоциите ти минават от 0 до 100 за три секунди и обратно за пет. Гневът ти е искрен, кратък и обикновено адресиран към бавен интернет.",
+    asc:"Хората те виждат като човек, който знае накъде върви. Ти просто ходиш бързо.",
+    flag:"Започва спор за нищо в 23:47 и го печели по служебен път — с викане." },
+  { name:"Телец", symbol:"♉", element:"earth", dates:"20.04 – 20.05",
+    sun:"Твоята идея за себеразвитие е нов ресторант. От дивана те вдига само храна или крайна несправедливост — в този ред. Инатът ти е с тектонична сила и ти го наричаш „принципи“.",
+    moon:"Успокояваш се с храна, одеяло и сериал, който си гледал шест пъти. Промяната те стресира повече, отколкото признаваш — включително новото меню на любимото ти място.",
+    asc:"Излъчваш спокойствие, което околните бъркат с мъдрост. Всъщност мислиш за вечеря.",
+    flag:"Думата „компромис“ я е чувал. Отдалеч. Веднъж." },
+  { name:"Близнаци", symbol:"♊", element:"air", dates:"21.05 – 20.06",
+    sun:"47 отворени таба — в браузъра и в главата ти. Обещаваш „ще се чуем“ на петима души дневно и не се чуваш с никого. Мнението ти се сменя по-често от правителство.",
+    moon:"Обработваш чувствата, като говориш за тях. С всички. Едновременно. После пишеш дълго съобщение и го изтриваш с достойнство.",
+    asc:"За всички си душата на компанията. Само ти знаеш колко струва това шоу на батерията ти.",
+    flag:"Казва „тръгвам си“ и си тръгва след час и четиридесет минути. На вратата. С палто." },
+  { name:"Рак", symbol:"♋", element:"water", dates:"21.06 – 22.07",
+    sun:"Помниш какво ти е казал някой през 2017-а. Дословно. Домошар си, но искаш да те канят навсякъде — за да имаш какво да откажеш. Емоционалният ти багаж не минава за ръчен.",
+    moon:"Чувстваш всичко в 4K с обемен звук. Обиждаш се тихо и дълбоко, после казваш „нищо ми няма“ с тон, който казва абсолютно всичко.",
+    asc:"Имаш лице на човек, който „ще разбере“. Хората ти разказват живота си на втората среща. Понякога на първата.",
+    flag:"По средата на спор за миялната ще извади нещо, което си казал през 2019-а. С дата и час." },
+  { name:"Лъв", symbol:"♌", element:"fire", dates:"23.07 – 22.08",
+    sun:"Не си егоцентричен — просто си статистически сигурен, че всички говорят за теб. И честно казано, често си прав. Инстаграмът ти е автобиография в реално време.",
+    moon:"Имаш нужда да те забележат дори когато казваш, че искаш да те оставят на мира. Особено тогава.",
+    asc:"Влизаш в стаята и стаята го усеща. Дори когато си дошъл само за зарядното.",
+    flag:"Ще превърне твоя рожден ден в събитие за себе си. Ще има слайдове." },
+  { name:"Дева", symbol:"♍", element:"earth", dates:"23.08 – 22.09",
+    sun:"Правиш списък със задачи, който включва „направи списък“. Забелязваш чуждите правописни грешки и мълчаливо съдиш. Перфекционизмът ти е суперсила и причина за киселините — едновременно.",
+    moon:"Тревожиш се научно — със списъци, сценарии и план Б за плана Б. Грижата ти за другите е любов, дегизирана като критика.",
+    asc:"Изглеждаш като човек с всичко под контрол. Табовете в главата ти имат друго мнение.",
+    flag:"Ще ти пренареди чекмеджетата „за твое добро“. Без да пита. С етикети." },
+  { name:"Везни", symbol:"♎", element:"air", dates:"23.09 – 22.10",
+    sun:"40 минути избираш какво да поръчаш, после ядеш от чуждото. Изглеждаш страхотно, докато не взимаш решения. При конфликт внезапно „се сещаш, че имаш работа“.",
+    moon:"Не можеш да си спокоен, ако някой ти е сърдит. Дори касиерката. Особено касиерката.",
+    asc:"Първо впечатление: чаровен и безконфликтен. За истинското ти мнение хората научават с години закъснение.",
+    flag:"„Ти избери“ е тест. Верен отговор не съществува. Никога не е съществувал." },
+  { name:"Скорпион", symbol:"♏", element:"water", dates:"23.10 – 21.11",
+    sun:"Знаеш тайните на всички; твоите ще се разберат на погребението ти. Не си отмъстителен — имаш просто отлична памет и олимпийско търпение. Гледаш хората, все едно им знаеш ПИН-а. Знаеш го.",
+    moon:"Чувстваш на 100% или изобщо. Доверие се печели с години и се губи с едно „видяно“ без отговор.",
+    asc:"Излъчваш „не ме заговаряй“, което по ирония привлича всички. Мистерията е неволна, но работи безотказно.",
+    flag:"Знае паролата ти. Не си му я казвал. Не питай откъде." },
+  { name:"Стрелец", symbol:"♐", element:"fire", dates:"22.11 – 21.12",
+    sun:"Планираш преместване в Лисабон от 2019-а. Казваш на хората истината в лицето и го наричаш „честност“; те го наричат „сеанс без записан час“. Свободата ти е по-важна от наема. Личи си.",
+    moon:"Стане ли ти тежко, отваряш сайтове за билети. Защитният ти механизъм е хумор плюс нискотарифна авиокомпания.",
+    asc:"Изглеждаш като човек с интересен живот. Отчасти защото е вярно, отчасти защото го разказваш по-добре, отколкото се е случило.",
+    flag:"Изчезва „за малко на планина“ и се появява в Белград. Във вторник." },
+  { name:"Козирог", symbol:"♑", element:"earth", dates:"22.12 – 19.01",
+    sun:"Отговаряш на служебни имейли в неделя и се чудиш защо си уморен. Смяташ, че бърнаутът е за други хора — той смята обратното. Представата ти за почивка включва таблица.",
+    moon:"Планираш да обработиш чувствата си, „като се поосвободиш“. Не се освобождаваш никога. Космосът предлага да поговориш с някого за това — професионално.",
+    asc:"Хората те взимат за сериозен, преди да си казал и дума. На тиймбилдинг те бъркат с шефа. Два пъти.",
+    flag:"Ще ти прати покана за романтична вечеря през Google Calendar. С дневен ред." },
+  { name:"Водолей", symbol:"♒", element:"air", dates:"20.01 – 18.02",
+    sun:"Обичаш човечеството по принцип и гледаш конкретните хора с подозрение. Имаш позиция по всичко, включително по теми, които още не съществуват. „Аз не съм като другите“ при теб е цяла личност.",
+    moon:"Анализираш емоциите си от безопасна дистанция, като чужд научен проект. Близостта те стряска, самотата те дразни. Весело съжителство.",
+    asc:"Първо впечатление: „странен, но готин“. Второ впечатление: същото, с повече уважение.",
+    flag:"Ще ти обясни защо емоцията ти е „логически непоследователна“. По време на емоцията." },
+  { name:"Риби", symbol:"♓", element:"water", dates:"19.02 – 20.03",
+    sun:"Живееш в паралелна реалност с по-добър саундтрак. Закъсняваш, защото времето за теб е препоръка. Плачеш на реклами, но в истинска криза изведнъж си най-стабилният човек в стаята. Никой не знае как.",
+    moon:"Абсорбираш чужди настроения като гъба. Влизаш в стая с напрежение, излизаш с чужда мигрена и не знаеш чия е.",
+    asc:"Излъчваш мека, леко разсеяна аура. Никой не подозира колко неща забелязваш. Всичките.",
+    flag:"Ще закъснее за собственото ви сдобряване. С красиво извинение обаче." }
+];
+
+const CITIES = [
+  { name:"София",    text:"София: към наталната ти карта се добавят +15% хроничен трафик, наем колкото заплата и умението да казваш „в квартала съм“ за място на 40 минути път. Космосът ти съчувства, но и той е под наем." },
+  { name:"Пловдив",  text:"Пловдив: роден си с вграден „айляк“ — космическа настройка, която обърква козирозите и вбесява работодателите. Пази я. По-рядка е от паркомясто в Капана." },
+  { name:"Варна",    text:"Варна: лятото ти е личностна черта. Останалите девет месеца си в енергоспестяващ режим и чакаш морето да се стопли. То също те чака." },
+  { name:"Бургас",   text:"Бургас: морска душа, вечен дебат с Варна и вътрешно спокойствие, което идва от близостта до солта. В спора Космосът тайно е на твоя страна." },
+  { name:"Друг град",text:"Роден извън „голямата четворка“: имаш здрава връзка със земята и баба, която те храни против волята ти. Това е суперсила. Не се шегуваме." },
+  { name:"Чужбина",  text:"Чужбина: разстоянието от НАП ти придава ведрина, която местните разпознават от километър. Носталгията ти е по лютеница, не по инфраструктура." }
+];
+
+/* ============================================================
+   ДНЕС · известията са условни спрямо РЕАЛНОТО небе — виж
+   computeSky() по-долу. Всеки таг се показва само когато
+   реалната астрономия го потвърждава за текущата дата.
+   Тагове без ретроградна/лунна обвързаност = "generic": хумор
+   без конкретно астрономическо твърдение, затова е безопасен
+   за всеки ден.
+   ============================================================ */
+const DAILY_POOL = [
+  { tag:"mercury_retrograde", text:"Меркурий е ретрограден. Не пращай съобщението. Знаеш кое. Космосът те гледа и вече клати глава." },
+  { tag:"mercury_retrograde", text:"Ретрограден Меркурий, официално. Провери два пъти всеки имейл, билет и „сигурен“ адрес, преди да натиснеш „изпрати“." },
+  { tag:"mercury_direct",     text:"Меркурий е директен. Пиши съобщението. Кажи го в очите. За момент Космосът е на твоя страна." },
+  { tag:"mercury_direct",     text:"Комуникацията днес тече сравнително гладко — доколкото това изобщо е възможно с хората около теб." },
+  { tag:"venus_retrograde",   text:"Венера е ретроградна. Не е денят за нови татуировки, нови ексове или решения „за любовта“. Изчакай." },
+  { tag:"venus_direct",       text:"Венера ти намига. Това значи да си купиш нещо хубаво, а не да пишеш на човека, който те заряза през март." },
+  { tag:"mars_retrograde",    text:"Марс е ретрограден. Енергията ти е насочена навътре, а не към спорове — за твое добро, засега." },
+  { tag:"mars_direct",        text:"Марс е директен и нетърпелив. Ти също ще бъдеш — около 17:30, в градския транспорт. Дишай през носа." },
+  { tag:"full_moon",          text:"Пълнолуние е. Ако всичко ти изглежда драматично — не си само ти. Но малко си и ти." },
+  { tag:"new_moon",           text:"Новолуние е. Добър момент за нов „Living my best life 2.0“ документ, който ще преименуваш след седмица." },
+  { tag:"generic", text:"Днес звездите препоръчват да не отговаряш на „здр, кп“ от бившия. Проверихме — нищо ново няма да ти каже." },
+  { tag:"generic", text:"Космически съвет: „ще се видим тия дни“ не е план. Днес е денят да си го признаеш." },
+  { tag:"generic", text:"Енергията днес е идеална за нови начинания. Утрешната е идеална за отказване от тях. Кръговрат." },
+  { tag:"generic", text:"Космосът обяви: тази седмица не си виновен ти. За другата не поемаме ангажимент." },
+  { tag:"generic", text:"Днес Вселената подкрепя смели решения. Смяната на тарифния план не се брои, но е начало." },
+  { tag:"generic", text:"Звездите казват „почивай“. Шефът ти казва друго. Звездите са по-старши, но не подписват болнични." },
+  { tag:"jupiter_retrograde", text:"Юпитер е ретрограден. Растежът е насочен навътре — преразглеждаш стари планове, вместо да стартираш нови. Не е слабост, а ревизия." },
+  { tag:"jupiter_direct",     text:"Юпитер е директен и щедър по природа. НАП — не. Планирай бюджета съответно." },
+  { tag:"saturn_retrograde",  text:"Сатурн е ретрограден. Уроците, които бягаш да научиш, се връщат — с лихва и без извинение." },
+  { tag:"saturn_direct",      text:"Сатурн е директен. Дисциплината се отплаща бавно, но точно днес не изглежда толкова непоносима." }
+];
+
+/* Емоционален привкус по стихия — ползва се за динамичното
+   съобщение „Луната е в Х“, изчислено от реалния лунен знак. */
+/* Домове (Whole Sign) — къде в живота ти пада днешният транзит */
+const HOUSE_MEANINGS = [
+  "как изглеждаш в очите на непознати, преди да си казал и дума",
+  "банковата ти сметка и колко струваш в собствените си очи — различни числа, за жалост",
+  "груповите чатове, съседите и разговорите, които никога не довършваш",
+  "апартаментът под наем, който наричаш „у дома“, и семейният чат",
+  "флиртовете, драмата и хобито, което зарязваш на 60%",
+  "работният имейл в неделя, гърбът, който боли, и списъкът със задачи",
+  "връзката, в която си, или тази, за която пишеш дълго съобщение и го триеш",
+  "дълговете, съвместната сметка и нещата, които премълчаваш дори пред терапевта",
+  "билетите, пазени в друг таб, и мнението ти по теми, в които не си експерт",
+  "шефът, LinkedIn профилът и версията на теб, показвана на видеоразговори",
+  "груповия чат, който вече не отваряш, и плановете, които никой не осъществява",
+  "нещата, премълчани дори пред себе си, и защо не спиш в 3 сутринта"
+];
+
+const ELEMENT_MOOD = {
+  fire:  "избухливи и нетърпеливи",
+  earth: "инатливи и фиксирани на детайли",
+  air:   "разсеяни и презаписани с мисли",
+  water: "свръхчувствителни и склонни да четат между редовете"
+};
+
+const CHAOS_BANDS = [
+  { max:20,  label:"Подозрително спокойно небе. Не се доверявай напълно." },
+  { max:38,  label:"Стандартна българска сряда." },
+  { max:58,  label:"Леко напрежение във въздуха. Класика." },
+  { max:76,  label:"Ниво: извънредно заседание на парламента." },
+  { max:100, label:"Реално астрономическо струпване. Внимавай с обещанията." }
+];
+
+/* При „Преизчисли“ НЕ променяме числото — реалното небе не се
+   мени от клик. Сменя се само коментарът, а тонът е честен
+   за това. */
+const REROLL_COMMENTS = [
+  "Космосът не помръдна. Само тонът ни се смени.",
+  "Преизчислихме — небето отказва да сътрудничи.",
+  "Same sky, друго настроение.",
+  "Данните са реални, коментарът — не чак толкова.",
+  "Сензорите потвърждават: нищо не се промени. Съжаляваме."
+];
+
+const LOADING_STEPS = [
+  "Космосът се консултира със звездите…",
+  "Меркурий бави отговора. Ретрограден е…",
+  "Сравняваме червените флагове…",
+  "Готово. Дръж се."
+];
+
+/* Ключ: елементите по азбучен ред (en), съединени с + */
+const ELEMENT_DYNAMICS = {
+  "fire+fire":   "Двама души, които никога не грешат. Питайте съседите.",
+  "earth+earth": "Стабилност на нивото на панелка — нищо не я мърда. Включително спонтанността.",
+  "air+air":     "Феноменални разговори до 4 сутринта. Сметката за тока обаче никой не я плаща навреме.",
+  "water+water": "Дълбоко, красиво и леко наводнено. Дръжте кърпички на всяка повърхност.",
+  "air+fire":    "Огън плюс въздух е пожар с вентилатор. Зрелищно. Понякога буквално.",
+  "earth+water": "Градина или кал — зависи от седмицата и от това кой е поливал комуникацията.",
+  "earth+fire":  "Единият пали идеи, другият ги гаси „от практичност“. Весело е. За наблюдателите.",
+  "fire+water":  "Пара. Първо е романтично, после е сауна, от която никой не признава, че иска да излезе.",
+  "air+earth":   "Единият прави петгодишен план, другият прави балони. Може да е чар. Наблягаме на „може“.",
+  "air+water":   "Единият анализира чувството, другият го чувства. Препоръчваме преводач. Или терапевт."
+};
+
+const VERDICTS = [
+  { min:85, title:"Космическа връзка",
+    text:"Дразнещо е колко си пасвате. Другите двойки ви мразят тихо и подредено.",
+    advice:"Не разваляйте нещата с прекалено мислене. Космосът рядко е толкова щедър — не му връщайте подаръка." },
+  { min:70, title:"Има потенциал",
+    text:"С малко търпение, много кафе и поне един работещ календар — става.",
+    advice:"Говорете си. С думи. На глас. Не през стории с песни „с послание“." },
+  { min:50, title:"50 на 50",
+    text:"Като времето през април — слънце сутринта, градушка след обяд.",
+    advice:"Ще трябва усилие. От двамата. Едновременно. Знаем — звучи като фантастика." },
+  { min:30, title:"Космосът е скептичен",
+    text:"Възможно е, но ще е сериал. Дълъг. С поне един сезон, който всички искат да забравят.",
+    advice:"Ако ще опитвате — пазете си скрийншотите. За мемоарите." },
+  { min:0,  title:"Астрологична катастрофа",
+    text:"Но пък какви истории ще имате. Внуците няма да вярват.",
+    advice:"Космосът официално си измива ръцете. Оттук нататък: свободна воля, ваша отговорност." }
+];
+
+/* ============================================================
+   ПОМОЩНИ ФУНКЦИИ
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
+  { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[c]
+));
+
+function hashStr(str){
+  let h = 2166136261;
+  for (const ch of str){
+    h ^= ch.codePointAt(0);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function easeOut(k){ return 1 - Math.pow(1 - k, 3); }
+
+function countUp(el, to, dur, suffix){
+  const t0 = performance.now();
+  function frame(t){
+    const k = Math.min(1, (t - t0) / dur);
+    el.textContent = Math.round(to * easeOut(k)) + suffix;
+    if (k < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+let toastTimer = null;
+function toast(msg){
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+/* ============================================================
+   КОСМИЧЕСКА СЦЕНА · звездно поле + метеори (canvas)
+   ============================================================ */
+(function cosmosScene(){
+  const cv = $("cosmos");
+  const ctx = cv.getContext("2d");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let stars = [], meteors = [];
+
+  function resize(){
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = innerWidth * d;
+    cv.height = innerHeight * d;
+    cv.style.width = innerWidth + "px";
+    cv.style.height = innerHeight + "px";
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    const n = Math.min(220, Math.floor(innerWidth * innerHeight / 8500));
+    stars = Array.from({ length: n }, () => ({
+      x: Math.random() * innerWidth,
+      y: Math.random() * innerHeight,
+      r: Math.random() * 1.25 + 0.35,
+      p: Math.random() * Math.PI * 2,
+      s: Math.random() * 0.9 + 0.25,
+      hue: Math.random()
+    }));
+  }
+
+  function tick(t){
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const st of stars){
+      const tw = reduced ? 0.8 : (0.5 + 0.5 * Math.sin(t / 1000 * st.s + st.p));
+      ctx.globalAlpha = 0.25 + tw * 0.7;
+      ctx.fillStyle = st.hue > 0.93 ? "#c6ff4a" : (st.hue > 0.8 ? "#8fe8ff" : "#ffffff");
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, st.r, 0, 6.2832);
+      ctx.fill();
+    }
+    if (!reduced){
+      if (Math.random() < 0.0035 && meteors.length < 2){
+        meteors.push({
+          x: innerWidth * (0.15 + Math.random() * 0.75),
+          y: -20,
+          vx: 2.4 + Math.random() * 2.2,
+          vy: 3.2 + Math.random() * 2.2,
+          life: 1
+        });
+      }
+      for (const m of meteors){
+        m.x += m.vx * 3; m.y += m.vy * 3; m.life -= 0.018;
+        const g = ctx.createLinearGradient(m.x, m.y, m.x - m.vx * 24, m.y - m.vy * 24);
+        g.addColorStop(0, "rgba(198,255,74," + (0.9 * Math.max(0, m.life)) + ")");
+        g.addColorStop(1, "rgba(92,225,255,0)");
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(m.x, m.y);
+        ctx.lineTo(m.x - m.vx * 24, m.y - m.vy * 24);
+        ctx.stroke();
+      }
+      meteors = meteors.filter((m) => m.life > 0 && m.y < innerHeight + 60);
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  }
+
+  addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(tick);
+})();
+
+/* ============================================================
+   НАВИГАЦИЯ
+   ============================================================ */
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+    const target = $(btn.dataset.target);
+    target.classList.remove("active");
+    void target.offsetWidth; /* рестарт на анимацията */
+    target.classList.add("active");
+    if (btn.dataset.target === "screen-today" && typeof refreshPersonalCard === "function") refreshPersonalCard();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+});
+
+/* ============================================================
+   РЕАЛНА АСТРОНОМИЯ · Astronomy Engine (отворен код, ефемериди)
+   Всичко в модул „Днес“ произтича от тук — няма измислени
+   транзити. Ако библиотеката не се зареди (напр. няма мрежа),
+   деградираме честно към генерични текстове, а не към фалшиви
+   астрономически твърдения.
+   ============================================================ */
+/* ============================================================
+   НАТАЛНА КАРТА · Основен двигател (Вариант А — пълна точност)
+   Формулите за Асцендент/MC са сверени срещу независим, изцяло
+   разписан референтен пример (radixpro.com/a4a-start/the-ascendant)
+   — съвпадение до 5 дъгови секунди за Асцендент, 19 за MC. Часовата
+   зона на раждане се определя през Intl API с IANA tz базата данни
+   (реални исторически правила за България: без лятно часово 1945-
+   1978, въведено отново от 1979 г. — сверено срещу независими
+   източници). Домова система: Whole Sign (виж бележка в чата).
+   ============================================================ */
+function localBGTimeToUTC(y, m, d, h, min){
+  let guess = new Date(Date.UTC(y, m - 1, d, h, min));
+  for (let i = 0; i < 3; i++){
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Sofia", hour12:false,
+      year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"
+    });
+    const p = Object.fromEntries(fmt.formatToParts(guess).map(x => [x.type, x.value]));
+    const asIfLocal = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour === 24 ? 0 : +p.hour, +p.minute);
+    const target = Date.UTC(y, m - 1, d, h, min);
+    guess = new Date(guess.getTime() + (target - asIfLocal));
+  }
+  return guess;
+}
+
+const NATAL_BODIES = ["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn","Uranus","Neptune","Pluto"];
+const NATAL_BODIES_BG = { Sun:"Слънце", Moon:"Луна", Mercury:"Меркурий", Venus:"Венера", Mars:"Марс",
+  Jupiter:"Юпитер", Saturn:"Сатурн", Uranus:"Уран", Neptune:"Нептун", Pluto:"Плутон" };
+
+function computeNatalChart(y, m, d, h, min, lat, lon){
+  if (typeof Astronomy === "undefined") return null;
+  try {
+    const utcDate = localBGTimeToUTC(y, m, d, h, min);
+
+    function elon(body, dt){ return Astronomy.Ecliptic(Astronomy.GeoVector(body, dt, true)).elon; }
+    function signOf(lon_){
+      const idx = Math.floor((((lon_ % 360) + 360) % 360) / 30);
+      return { idx, sign: SIGNS[idx], deg: (((lon_ % 360) + 360) % 360) - idx * 30 };
+    }
+
+    const planets = NATAL_BODIES.map(name => {
+      const lonDeg = elon(Astronomy.Body[name], utcDate);
+      const pos = signOf(lonDeg);
+      return { name, nameBg: NATAL_BODIES_BG[name], longitude: lonDeg, sign: pos.sign, signIdx: pos.idx, degInSign: pos.deg };
+    });
+
+    /* Асцендент/MC — виж сверката в чата */
+    const gast = Astronomy.SiderealTime(utcDate);
+    let lst = (gast + lon / 15) % 24; if (lst < 0) lst += 24;
+    const ramc = (lst * 15) % 360;
+    const t = Astronomy.MakeTime(utcDate);
+    const T = t.tt / 36525;
+    const oblDeg = 23.4392911 - 0.0130042*T - 0.00000016*T*T + 0.000000504*T*T*T;
+    const toRad = dg => dg * Math.PI/180, toDeg = r => r * 180/Math.PI;
+    const R = toRad(ramc), E = toRad(oblDeg), L = toRad(lat);
+
+    let ascDeg = toDeg(Math.atan2(Math.cos(R), -(Math.sin(R)*Math.cos(E) + Math.tan(L)*Math.sin(E))));
+    ascDeg = ((ascDeg % 360) + 360) % 360;
+    const ascPos = signOf(ascDeg);
+
+    let mcDeg = toDeg(Math.atan2(Math.sin(R), Math.cos(R)*Math.cos(E)));
+    mcDeg = ((mcDeg % 360) + 360) % 360;
+    const mcPos = signOf(mcDeg);
+
+    /* Whole Sign домове: Дом 1 = знакът на Асцендента, после последователно */
+    planets.forEach(p => { p.house = ((p.signIdx - ascPos.idx + 12) % 12) + 1; });
+
+    return {
+      utcDate, planets,
+      ascendant: { longitude: ascDeg, sign: ascPos.sign, signIdx: ascPos.idx, degInSign: ascPos.deg },
+      midheaven:  { longitude: mcDeg,  sign: mcPos.sign,  signIdx: mcPos.idx,  degInSign: mcPos.deg }
+    };
+  } catch (e){
+    console.warn("Наталната карта не се изчисли:", e);
+    return null;
+  }
+}
+
+
+function computeSky(date){
+  if (typeof Astronomy === "undefined") return null;
+  try {
+    function elon(body, d){
+      return Astronomy.Ecliptic(Astronomy.GeoVector(body, d, true)).elon;
+    }
+    function isRetro(body, d){
+      const lon1 = elon(body, d);
+      const lon2 = elon(body, new Date(d.getTime() + 86400000));
+      let diff = lon2 - lon1;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      return diff < 0;
+    }
+    function signOf(lon){
+      const idx = Math.floor((((lon % 360) + 360) % 360) / 30);
+      return SIGNS[idx];
+    }
+    function phaseInfo(angle){
+      if (angle < 12 || angle >= 348) return { key:"new_moon",  label:"Новолуние" };
+      if (angle < 168)                return { key:"waxing",    label:"Растяща луна" };
+      if (angle < 192)                return { key:"full_moon", label:"Пълнолуние" };
+      return                                  { key:"waning",    label:"Намаляваща луна" };
+    }
+
+    function signIdxOf(lon){ return Math.floor((((lon % 360) + 360) % 360) / 30); }
+
+    const mercuryRetro = isRetro(Astronomy.Body.Mercury, date);
+    const venusRetro    = isRetro(Astronomy.Body.Venus,   date);
+    const marsRetro      = isRetro(Astronomy.Body.Mars,    date);
+    const jupiterRetro  = isRetro(Astronomy.Body.Jupiter, date);
+    const saturnRetro    = isRetro(Astronomy.Body.Saturn,  date);
+    const moonSign = signOf(elon(Astronomy.Body.Moon, date));
+    const sunSign  = signOf(elon(Astronomy.Body.Sun,  date));
+    const phaseAngle = Astronomy.MoonPhase(date);
+
+    /* Знак + индекс на 5-те лични/социални планети — добавъчно, за
+       нуждите на персонализацията спрямо наталната карта (транзити
+       през домовете). Не променя нищо от вече съществуващите полета. */
+    const mercurySignIdx = signIdxOf(elon(Astronomy.Body.Mercury, date));
+    const venusSignIdx   = signIdxOf(elon(Astronomy.Body.Venus,   date));
+    const marsSignIdx    = signIdxOf(elon(Astronomy.Body.Mars,    date));
+    const jupiterSignIdx = signIdxOf(elon(Astronomy.Body.Jupiter, date));
+    const saturnSignIdx  = signIdxOf(elon(Astronomy.Body.Saturn,  date));
+    const moonSignIdx    = signIdxOf(elon(Astronomy.Body.Moon,    date));
+
+    return {
+      mercuryRetro, venusRetro, marsRetro, jupiterRetro, saturnRetro,
+      moonSign, sunSign, phaseAngle, phase: phaseInfo(phaseAngle),
+      mercurySignIdx, venusSignIdx, marsSignIdx, jupiterSignIdx, saturnSignIdx, moonSignIdx
+    };
+  } catch (e){
+    console.warn("Astro изчислението се провали:", e);
+    return null;
+  }
+}
+
+/* Подбира само съобщения, чиито условия реално важат днес */
+function pickDailyPool(sky){
+  if (!sky) return DAILY_POOL.filter(i => i.tag === "generic").map(i => i.text);
+  const pool = [];
+  DAILY_POOL.forEach(item => {
+    switch (item.tag){
+      case "generic": pool.push(item.text); break;
+      case "mercury_retrograde": if (sky.mercuryRetro)  pool.push(item.text); break;
+      case "mercury_direct":     if (!sky.mercuryRetro) pool.push(item.text); break;
+      case "venus_retrograde":   if (sky.venusRetro)     pool.push(item.text); break;
+      case "venus_direct":       if (!sky.venusRetro)    pool.push(item.text); break;
+      case "mars_retrograde":    if (sky.marsRetro)       pool.push(item.text); break;
+      case "mars_direct":        if (!sky.marsRetro)      pool.push(item.text); break;
+      case "full_moon":          if (sky.phase.key === "full_moon") pool.push(item.text); break;
+      case "new_moon":           if (sky.phase.key === "new_moon")  pool.push(item.text); break;
+      case "jupiter_retrograde": if (sky.jupiterRetro)  pool.push(item.text); break;
+      case "jupiter_direct":     if (!sky.jupiterRetro) pool.push(item.text); break;
+      case "saturn_retrograde":  if (sky.saturnRetro)   pool.push(item.text); break;
+      case "saturn_direct":      if (!sky.saturnRetro)  pool.push(item.text); break;
+    }
+  });
+  pool.push(`Луната е в ${sky.moonSign.symbol} ${sky.moonSign.name} и днес всички сме малко по-${ELEMENT_MOOD[sky.moonSign.element]}.`);
+  return pool;
+}
+
+/* Хаос-резултат, изграден от реални фактори — не от случайно число */
+function chaosScore(sky){
+  if (!sky) return 50; /* неутрален, честно обозначен fallback */
+  let score = 8;
+  if (sky.mercuryRetro) score += 26;
+  if (sky.venusRetro)   score += 14;
+  if (sky.marsRetro)    score += 14;
+  if (sky.jupiterRetro) score += 5;
+  if (sky.saturnRetro)  score += 5;
+  const distToFull = Math.abs(sky.phaseAngle - 180);
+  const distToNew  = Math.min(sky.phaseAngle, 360 - sky.phaseAngle);
+  score += Math.max(0, 18 - Math.min(distToFull, distToNew) * 0.5); /* пик при пълно/новолуние */
+  return Math.max(4, Math.min(99, Math.round(score)));
+}
+
+function renderChips(sky){
+  const el = $("chipsRow");
+  el.innerHTML = "";
+  const src = $("astroSource");
+  if (!sky){
+    el.innerHTML = '<span class="chip">Няма връзка с астрономическите изчисления в момента</span>';
+    if (src) src.textContent = "Опитай да презаредиш — данните идват от изчисление в реално време, не от заготовка.";
+    return;
+  }
+  [
+    { label:`Меркурий · ${sky.mercuryRetro ? "ретрограден" : "директен"}`, hot: sky.mercuryRetro },
+    { label:`Венера · ${sky.venusRetro ? "ретроградна" : "директна"}`,      hot: sky.venusRetro },
+    { label:`Марс · ${sky.marsRetro ? "ретрограден" : "директен"}`,        hot: sky.marsRetro },
+    { label:`Юпитер · ${sky.jupiterRetro ? "ретрограден" : "директен"}`,   hot: sky.jupiterRetro },
+    { label:`Сатурн · ${sky.saturnRetro ? "ретрограден" : "директен"}`,    hot: sky.saturnRetro },
+    { label:`Луна · ${sky.phase.label}`, hot: sky.phase.key === "full_moon" || sky.phase.key === "new_moon" },
+    { label:`Луна в ${sky.moonSign.symbol} ${sky.moonSign.name}`, hot:false },
+    { label:`Сезон на ${sky.sunSign.symbol} ${sky.sunSign.name}`, hot:false }
+  ].forEach(it => {
+    const span = document.createElement("span");
+    span.className = "chip" + (it.hot ? " hot" : "");
+    span.textContent = it.label;
+    el.appendChild(span);
+  });
+}
+
+/* ============================================================
+   ЛИЧНА ПЕРСОНАЛИЗАЦИЯ · транзити спрямо наталните домове
+   Изисква запазена натална карта С час И разпознат град (иначе
+   няма надежден Асцендент — виж дискусията в чата). Ако липсва
+   което и да е от двете, функцията връща null и „Днес" просто не
+   показва личната карта — честна деградация, никакво гадаене.
+   ============================================================ */
+function getSavedNatalChart(){
+  try {
+    const raw = localStorage.getItem("retrograden_natal_v1");
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data.timeKnown || !data.time || !data.date) return null;
+    const town = (typeof BULGARIA_TOWNS !== "undefined")
+      ? (BULGARIA_TOWNS.find(t => t.label === data.cityLabel) || BULGARIA_TOWNS.find(t => t.name === data.cityLabel))
+      : null;
+    if (!town) return null;
+    const [y, m, d] = data.date.split("-").map(Number);
+    const [hh, mm] = data.time.split(":").map(Number);
+    const chart = computeNatalChart(y, m, d, hh, mm, town.lat, town.lon);
+    return chart ? { chart, name: data.name || "", debugDate: data.date, debugTime: data.time, debugTown: town.label, readAt: new Date().toISOString() } : null;
+  } catch(e){ console.warn("Наталната карта не се прочете от localStorage:", e); return null; }
+}
+
+function personalizeToday(sky, natal){
+  if (!sky || !natal || !natal.chart) return null;
+  const ascIdx = natal.chart.ascendant.signIdx;
+  function houseOf(signIdx){ return ((signIdx - ascIdx + 12) % 12) + 1; }
+
+  const moonHouse = houseOf(sky.moonSignIdx);
+  const lines = [`Луната днес се разхожда точно през твоя ${moonHouse}-и дом — ${HOUSE_MEANINGS[moonHouse - 1]}. Радвай се или се скрий, твой избор е.`];
+
+  /* Всяка планета говори различно, в тон с останалата част на
+     приложението — истинският механизъм (транзит през натален
+     дом) остава непроменен, сменя се само гласът. */
+  const RETRO_VOICE = {
+    "Меркурий": h => `Ретроградният Меркурий е избрал точно твоя ${h}-и дом за атака — ${HOUSE_MEANINGS[h - 1]}. Провери всичко два пъти, преди да натиснеш „изпрати“.`,
+    "Венера":   h => `Венера ретроградна се е загнездила в твоя ${h}-и дом — ${HOUSE_MEANINGS[h - 1]}. Не вземай решения точно сега, колкото и да ти се иска.`,
+    "Марс":     h => `Ретроградният Марс диша тежко в твоя ${h}-и дом — ${HOUSE_MEANINGS[h - 1]}. Пести си енергията, не влизай в спорове точно там.`,
+    "Юпитер":   h => `Ретроградният Юпитер преразглежда твоя ${h}-и дом — ${HOUSE_MEANINGS[h - 1]}. Растежът е навътре, не навън, засега.`,
+    "Сатурн":   h => `Сатурн ретрограден проверява домашната ти работа в ${h}-и дом — ${HOUSE_MEANINGS[h - 1]}. Урокът се връща — този път го научи.`
+  };
+
+  const retroPlanets = [
+    ["Меркурий", sky.mercuryRetro, sky.mercurySignIdx],
+    ["Венера",   sky.venusRetro,   sky.venusSignIdx],
+    ["Марс",     sky.marsRetro,    sky.marsSignIdx],
+    ["Юпитер",   sky.jupiterRetro, sky.jupiterSignIdx],
+    ["Сатурн",   sky.saturnRetro,  sky.saturnSignIdx]
+  ];
+  retroPlanets.filter(([,retro]) => retro).forEach(([nameBg,,signIdx]) => {
+    const h = houseOf(signIdx);
+    lines.push(RETRO_VOICE[nameBg](h));
+  });
+
+  return { lines, ascSign: natal.chart.ascendant.sign, name: natal.name,
+    debugDate: natal.debugDate, debugTime: natal.debugTime, debugTown: natal.debugTown, readAt: natal.readAt };
+}
+
+/* Преизчислява и показва картата „Лично от Ретрограден". Вика се
+   при: (1) първо зареждане, (2) всяко влизане в таб „Днес“,
+   (3) веднага след запазване на нова/коригирана натална карта.
+   Без това повторно извикване старият резултат остава залепен на
+   екрана дори след смяна на данните — реален бъг, който хванахме. */
+function refreshPersonalCard(){
+  const card = $("personalCard");
+  if (!card) return; // защита, ако бъде извикана преди DOM да е готов
+  const sky = computeSky(new Date());
+  const natal = getSavedNatalChart();
+  const personal = personalizeToday(sky, natal);
+  if (personal){
+    $("personalLines").innerHTML = personal.lines.map(l => "<p class=\"rc-text\">" + esc(l) + "</p>").join("");
+    $("personalAsc").textContent = personal.ascSign.symbol + " " + personal.ascSign.name;
+    const dbg = $("personalDebug");
+    if (dbg) dbg.textContent = "Диагностика: рожд. дата " + personal.debugDate + ", час " + personal.debugTime +
+      ", град " + personal.debugTown + " · изчислено в " + personal.readAt.slice(11,19) + " UTC";
+    card.classList.remove("hidden");
+  } else {
+    card.classList.add("hidden");
+  }
+}
+
+/* Добре размесен хеш на календарна дата (не линеен брояч!) — линеен
+   брояч mod N винаги дава период точно N дни (доказано по-горе с
+   реални данни: индекс 0 на 29.06 се повтаря на 09.07, 19.07…).
+   FNV-1a хешът чупи тази периодичност. */
+function hashDate(iso){
+  let h = 2166136261;
+  for (let i = 0; i < iso.length; i++){ h ^= iso.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function isoOf(date){ return date.toISOString().slice(0,10); }
+/* Индекс за деня + гаранция: никога два поредни дни едно и също
+   съобщение. "Вчера" се изчислява детерминирано от датата — не
+   се съхранява никъде, затова е stateless. */
+function dailyIndex(date, poolLen){
+  const todayIdx = hashDate(isoOf(date)) % poolLen;
+  const yestIso = isoOf(new Date(date.getTime() - 86400000));
+  const yestIdx = hashDate(yestIso) % poolLen;
+  return todayIdx === yestIdx ? (todayIdx + 1) % poolLen : todayIdx;
+}
+
+/* Координати на 4-те града от CITIES — за локално изчисление на
+   най-близкия град от GPS координати. НЯМА външен API повикване:
+   Nominatim и подобни услуги не гарантират CORS от file:// произход
+   (проверено — вижте разговора), затова смятаме офлайн. */
+/* Всички 259 града на България — от Bulgaria-geocoding (yurukov),
+   верифициран публичен набор от данни, сверен срещу известни
+   координати (виж чата). Изключени 2 манастирски записа, погрешно
+   тагнати като 'град' в изходника. Използва се за избор на
+   място на раждане в наталната карта. */
+const BULGARIA_TOWNS = [
+  {name:"Айтос",label:"Айтос",lat:42.70312,lon:27.25064},
+  {name:"Аксаково",label:"Аксаково",lat:43.25904,lon:27.81738},
+  {name:"Алфатар",label:"Алфатар",lat:43.94585,lon:27.28657},
+  {name:"Антоново",label:"Антоново",lat:43.14924,lon:26.1606},
+  {name:"Априлци",label:"Априлци",lat:42.8405,lon:24.91949},
+  {name:"Ардино",label:"Ардино",lat:41.58339,lon:25.13368},
+  {name:"Асеновград",label:"Асеновград",lat:42.00859,lon:24.87758},
+  {name:"Ахелой",label:"Ахелой",lat:42.64601,lon:27.64938},
+  {name:"Ахтопол",label:"Ахтопол",lat:42.09939,lon:27.94072},
+  {name:"Балчик",label:"Балчик",lat:43.4269,lon:28.16172},
+  {name:"Банкя",label:"Банкя",lat:42.7074,lon:23.14697},
+  {name:"Банско",label:"Банско",lat:41.84042,lon:23.48565},
+  {name:"Баня",label:"Баня",lat:42.54313,lon:24.8333},
+  {name:"Батак",label:"Батак",lat:41.94418,lon:24.21897},
+  {name:"Батановци",label:"Батановци",lat:42.60203,lon:22.9551},
+  {name:"Белене",label:"Белене",lat:43.64451,lon:25.12464},
+  {name:"Белица",label:"Белица",lat:41.95077,lon:23.55922},
+  {name:"Белово",label:"Белово",lat:42.21475,lon:24.01808},
+  {name:"Белоградчик",label:"Белоградчик",lat:43.6272,lon:22.6836},
+  {name:"Белослав",label:"Белослав",lat:43.18711,lon:27.70417},
+  {name:"Берковица",label:"Берковица",lat:43.2361,lon:23.1258},
+  {name:"Благоевград",label:"Благоевград",lat:42.02086,lon:23.09434},
+  {name:"Бобов дол",label:"Бобов дол",lat:42.36639,lon:23.00519},
+  {name:"Бобошево",label:"Бобошево",lat:42.15097,lon:22.9995},
+  {name:"Божурище",label:"Божурище",lat:42.7635,lon:23.202},
+  {name:"Бойчиновци",label:"Бойчиновци",lat:43.4722,lon:23.3358},
+  {name:"Болярово",label:"Болярово",lat:42.1493,lon:26.80776},
+  {name:"Борово",label:"Борово",lat:43.48421,lon:25.80558},
+  {name:"Ботевград",label:"Ботевград",lat:42.90765,lon:23.79337},
+  {name:"Брацигово",label:"Брацигово",lat:42.0167,lon:24.3667},
+  {name:"Брегово",label:"Брегово",lat:44.14843,lon:22.64201},
+  {name:"Брезник",label:"Брезник",lat:42.73987,lon:22.90387},
+  {name:"Брезово",label:"Брезово",lat:42.34881,lon:25.07695},
+  {name:"Брусарци",label:"Брусарци",lat:43.6667,lon:23.0667},
+  {name:"Бургас",label:"Бургас",lat:42.50479,lon:27.46264},
+  {name:"Бухово",label:"Бухово",lat:42.76472,lon:23.56615},
+  {name:"Българово",label:"Българово",lat:42.62195,lon:27.30649},
+  {name:"Бяла",label:"Бяла (Варна)",lat:42.8799,lon:27.88112},
+  {name:"Бяла",label:"Бяла (Русе)",lat:43.45996,lon:25.73915},
+  {name:"Бяла Слатина",label:"Бяла Слатина",lat:43.4667,lon:23.9333},
+  {name:"Бяла черква",label:"Бяла черква",lat:43.20541,lon:25.31081},
+  {name:"Варна",label:"Варна",lat:43.20466,lon:27.91054},
+  {name:"Велики Преслав",label:"Велики Преслав",lat:43.16454,lon:26.81797},
+  {name:"Велико Търново",label:"Велико Търново",lat:43.08307,lon:25.6526},
+  {name:"Велинград",label:"Велинград",lat:42.02754,lon:23.99155},
+  {name:"Ветово",label:"Ветово",lat:43.70329,lon:26.26385},
+  {name:"Ветрен",label:"Ветрен",lat:42.27888,lon:24.04793},
+  {name:"Видин",label:"Видин",lat:43.99301,lon:22.88621},
+  {name:"Враца",label:"Враца",lat:43.21024,lon:23.55288},
+  {name:"Вълчедръм",label:"Вълчедръм",lat:43.69497,lon:23.4427},
+  {name:"Вълчи дол",label:"Вълчи дол",lat:43.40553,lon:27.55119},
+  {name:"Върбица",label:"Върбица",lat:42.99818,lon:26.67269},
+  {name:"Вършец",label:"Вършец",lat:43.19388,lon:23.28658},
+  {name:"Габрово",label:"Габрово",lat:42.87422,lon:25.31868},
+  {name:"Генерал Тошево",label:"Генерал Тошево",lat:43.70168,lon:28.03964},
+  {name:"Главиница",label:"Главиница",lat:43.91118,lon:26.83434},
+  {name:"Глоджево",label:"Глоджево",lat:43.73303,lon:26.38825},
+  {name:"Годеч",label:"Годеч",lat:43.0111,lon:23.04723},
+  {name:"Горна Оряховица",label:"Горна Оряховица",lat:43.1208,lon:25.68968},
+  {name:"Гоце Делчев",label:"Гоце Делчев",lat:41.57282,lon:23.72827},
+  {name:"Грамада",label:"Грамада",lat:43.8344,lon:22.6586},
+  {name:"Гулянци",label:"Гулянци",lat:43.64357,lon:24.6955},
+  {name:"Гурково",label:"Гурково",lat:42.65727,lon:25.79539},
+  {name:"Гълъбово",label:"Гълъбово",lat:42.13578,lon:25.86513},
+  {name:"Две могили",label:"Две могили",lat:43.59175,lon:25.87066},
+  {name:"Дебелец",label:"Дебелец",lat:43.0333,lon:25.6167},
+  {name:"Девин",label:"Девин",lat:41.74291,lon:24.39154},
+  {name:"Девня",label:"Девня",lat:43.2222,lon:27.5694},
+  {name:"Джебел",label:"Джебел",lat:41.49632,lon:25.30424},
+  {name:"Димитровград",label:"Димитровград",lat:42.06027,lon:25.59333},
+  {name:"Димово",label:"Димово",lat:43.7417,lon:22.7269},
+  {name:"Добринище",label:"Добринище",lat:41.82019,lon:23.55929},
+  {name:"Добрич",label:"Добрич",lat:43.5667,lon:27.8333},
+  {name:"Долна Митрополия",label:"Долна Митрополия",lat:43.4667,lon:24.5333},
+  {name:"Долна Оряховица",label:"Долна Оряховица",lat:43.15666,lon:25.73949},
+  {name:"Долна баня",label:"Долна баня",lat:42.31068,lon:23.76479},
+  {name:"Долни Дъбник",label:"Долни Дъбник",lat:43.40884,lon:24.44232},
+  {name:"Долни чифлик",label:"Долни чифлик",lat:42.9833,lon:27.7167},
+  {name:"Доспат",label:"Доспат",lat:41.64597,lon:24.15952},
+  {name:"Драгоман",label:"Драгоман",lat:42.9189,lon:22.9317},
+  {name:"Дряново",label:"Дряново",lat:42.98364,lon:25.47712},
+  {name:"Дулово",label:"Дулово",lat:43.82224,lon:27.1397},
+  {name:"Дунавци",label:"Дунавци",lat:43.91618,lon:22.81716},
+  {name:"Дупница",label:"Дупница",lat:42.26133,lon:23.11244},
+  {name:"Дългопол",label:"Дългопол",lat:43.04966,lon:27.34639},
+  {name:"Елена",label:"Елена",lat:42.92923,lon:25.87482},
+  {name:"Елин Пелин",label:"Елин Пелин",lat:42.66907,lon:23.60131},
+  {name:"Елхово",label:"Елхово",lat:42.17203,lon:26.56932},
+  {name:"Етрополе",label:"Етрополе",lat:42.83464,lon:23.99866},
+  {name:"Завет",label:"Завет",lat:43.76335,lon:26.67898},
+  {name:"Земен",label:"Земен",lat:42.47794,lon:22.74713},
+  {name:"Златарица",label:"Златарица",lat:43.04956,lon:25.89267},
+  {name:"Златица",label:"Златица",lat:42.71478,lon:24.13905},
+  {name:"Златоград",label:"Златоград",lat:41.37985,lon:25.09652},
+  {name:"Ивайловград",label:"Ивайловград",lat:41.5267,lon:26.12427},
+  {name:"Игнатиево",label:"Игнатиево",lat:43.24808,lon:27.77903},
+  {name:"Искър",label:"Искър",lat:43.45505,lon:24.26748},
+  {name:"Исперих",label:"Исперих",lat:43.71621,lon:26.83072},
+  {name:"Ихтиман",label:"Ихтиман",lat:42.43824,lon:23.81617},
+  {name:"Каблешково",label:"Каблешково",lat:42.6607,lon:27.5665},
+  {name:"Каварна",label:"Каварна",lat:43.43551,lon:28.33935},
+  {name:"Казанлък",label:"Казанлък",lat:42.61944,lon:25.39296},
+  {name:"Калофер",label:"Калофер",lat:42.61303,lon:24.96748},
+  {name:"Камено",label:"Камено",lat:42.57355,lon:27.29504},
+  {name:"Каолиново",label:"Каолиново",lat:43.6167,lon:27.1167},
+  {name:"Карлово",label:"Карлово",lat:42.64132,lon:24.80594},
+  {name:"Карнобат",label:"Карнобат",lat:42.65111,lon:26.98035},
+  {name:"Каспичан",label:"Каспичан",lat:43.31783,lon:27.15412},
+  {name:"Кермен",label:"Кермен",lat:42.508,lon:26.25722},
+  {name:"Килифарево",label:"Килифарево",lat:42.99495,lon:25.62156},
+  {name:"Китен",label:"Китен",lat:42.23427,lon:27.77021},
+  {name:"Клисура",label:"Клисура",lat:42.69307,lon:24.44964},
+  {name:"Кнежа",label:"Кнежа",lat:43.4928,lon:24.08076},
+  {name:"Козлодуй",label:"Козлодуй",lat:43.77556,lon:23.72462},
+  {name:"Койнаре",label:"Койнаре",lat:43.36153,lon:24.15026},
+  {name:"Копривщица",label:"Копривщица",lat:42.63612,lon:24.36029},
+  {name:"Костандово",label:"Костандово",lat:42.02325,lon:24.11248},
+  {name:"Костенец",label:"Костенец",lat:42.30597,lon:23.86262},
+  {name:"Костинброд",label:"Костинброд",lat:42.81302,lon:23.21543},
+  {name:"Котел",label:"Котел",lat:42.88677,lon:26.44965},
+  {name:"Кочериново",label:"Кочериново",lat:42.08459,lon:23.05579},
+  {name:"Кресна",label:"Кресна",lat:41.72048,lon:23.16644},
+  {name:"Криводол",label:"Криводол",lat:43.36826,lon:23.47511},
+  {name:"Кричим",label:"Кричим",lat:42.04263,lon:24.46697},
+  {name:"Крумовград",label:"Крумовград",lat:41.47129,lon:25.65531},
+  {name:"Крън",label:"Крън",lat:42.66578,lon:25.3738},
+  {name:"Кубрат",label:"Кубрат",lat:43.79614,lon:26.50053},
+  {name:"Куклен",label:"Куклен",lat:42.03434,lon:24.7873},
+  {name:"Кула",label:"Кула",lat:43.8878,lon:22.5214},
+  {name:"Кърджали",label:"Кърджали",lat:41.63737,lon:25.37359},
+  {name:"Кюстендил",label:"Кюстендил",lat:42.28688,lon:22.69393},
+  {name:"Левски",label:"Левски",lat:43.36145,lon:25.1431},
+  {name:"Летница",label:"Летница",lat:43.30668,lon:25.06125},
+  {name:"Ловеч",label:"Ловеч",lat:43.1333,lon:24.7167},
+  {name:"Лозница",label:"Лозница",lat:43.37183,lon:26.60803},
+  {name:"Лом",label:"Лом",lat:43.81784,lon:23.23833},
+  {name:"Луковит",label:"Луковит",lat:43.20784,lon:24.16299},
+  {name:"Лъки",label:"Лъки",lat:41.83299,lon:24.83143},
+  {name:"Любимец",label:"Любимец",lat:41.84737,lon:26.08554},
+  {name:"Лясковец",label:"Лясковец",lat:43.10814,lon:25.71972},
+  {name:"Мадан",label:"Мадан",lat:41.49858,lon:24.93993},
+  {name:"Маджарово",label:"Маджарово",lat:41.6333,lon:25.8667},
+  {name:"Малко Търново",label:"Малко Търново",lat:41.97979,lon:27.52505},
+  {name:"Мартен",label:"Мартен",lat:43.90462,lon:26.07428},
+  {name:"Мездра",label:"Мездра",lat:43.14621,lon:23.71434},
+  {name:"Мелник",label:"Мелник",lat:41.52461,lon:23.39151},
+  {name:"Меричлери",label:"Меричлери",lat:42.13739,lon:25.4961},
+  {name:"Мизия",label:"Мизия",lat:43.69124,lon:23.8534},
+  {name:"Момин проход",label:"Момин проход",lat:42.33039,lon:23.87104},
+  {name:"Момчилград",label:"Момчилград",lat:41.52728,lon:25.40939},
+  {name:"Монтана",label:"Монтана",lat:43.40852,lon:23.22573},
+  {name:"Мъглиж",label:"Мъглиж",lat:42.60677,lon:25.54544},
+  {name:"Неделино",label:"Неделино",lat:41.45639,lon:25.0788},
+  {name:"Несебър",label:"Несебър",lat:42.6592,lon:27.736},
+  {name:"Николаево",label:"Николаево",lat:42.63006,lon:25.79125},
+  {name:"Никопол",label:"Никопол",lat:43.70086,lon:24.89466},
+  {name:"Нова Загора",label:"Нова Загора",lat:42.49124,lon:26.01253},
+  {name:"Нови Искър",label:"Нови Искър",lat:42.80743,lon:23.34872},
+  {name:"Нови пазар",label:"Нови пазар",lat:43.34726,lon:27.19706},
+  {name:"Обзор",label:"Обзор",lat:42.81746,lon:27.87995},
+  {name:"Омуртаг",label:"Омуртаг",lat:43.10828,lon:26.41768},
+  {name:"Опака",label:"Опака",lat:43.44697,lon:26.17375},
+  {name:"Оряхово",label:"Оряхово",lat:43.73224,lon:23.96073},
+  {name:"Павел баня",label:"Павел баня",lat:42.59531,lon:25.20616},
+  {name:"Павликени",label:"Павликени",lat:43.23873,lon:25.30659},
+  {name:"Пазарджик",label:"Пазарджик",lat:42.19277,lon:24.33357},
+  {name:"Панагюрище",label:"Панагюрище",lat:42.50079,lon:24.18596},
+  {name:"Перник",label:"Перник",lat:42.60519,lon:23.03784},
+  {name:"Перущица",label:"Перущица",lat:42.05752,lon:24.54795},
+  {name:"Петрич",label:"Петрич",lat:41.39811,lon:23.20669},
+  {name:"Пещера",label:"Пещера",lat:42.02989,lon:24.29873},
+  {name:"Пирдоп",label:"Пирдоп",lat:42.70337,lon:24.17705},
+  {name:"Плачковци",label:"Плачковци",lat:42.82792,lon:25.48168},
+  {name:"Плевен",label:"Плевен",lat:43.39883,lon:24.60608},
+  {name:"Плиска",label:"Плиска",lat:43.36253,lon:27.12554},
+  {name:"Пловдив",label:"Пловдив",lat:42.15927,lon:24.74881},
+  {name:"Полски Тръмбеш",label:"Полски Тръмбеш",lat:43.371,lon:25.6329},
+  {name:"Поморие",label:"Поморие",lat:42.56805,lon:27.61557},
+  {name:"Попово",label:"Попово",lat:43.34906,lon:26.22682},
+  {name:"Пордим",label:"Пордим",lat:43.37798,lon:24.84764},
+  {name:"Правец",label:"Правец",lat:42.89425,lon:23.91884},
+  {name:"Приморско",label:"Приморско",lat:42.26837,lon:27.75329},
+  {name:"Провадия",label:"Провадия",lat:43.17703,lon:27.44057},
+  {name:"Първомай",label:"Първомай",lat:42.09691,lon:25.22046},
+  {name:"Раднево",label:"Раднево",lat:42.29226,lon:25.93662},
+  {name:"Радомир",label:"Радомир",lat:42.54426,lon:22.96158},
+  {name:"Разград",label:"Разград",lat:43.5333,lon:26.5167},
+  {name:"Разлог",label:"Разлог",lat:41.886,lon:23.46284},
+  {name:"Ракитово",label:"Ракитово",lat:41.98949,lon:24.08748},
+  {name:"Раковски",label:"Раковски",lat:42.27158,lon:24.9431},
+  {name:"Рила",label:"Рила",lat:42.12665,lon:23.1321},
+  {name:"Роман",label:"Роман",lat:43.1456,lon:23.92537},
+  {name:"Рудозем",label:"Рудозем",lat:41.48705,lon:24.84779},
+  {name:"Русе",label:"Русе",lat:43.83557,lon:25.96566},
+  {name:"Садово",label:"Садово",lat:42.1333,lon:24.9333},
+  {name:"Самоков",label:"Самоков",lat:42.337,lon:23.5528},
+  {name:"Сандански",label:"Сандански",lat:41.56784,lon:23.28035},
+  {name:"Сапарева баня",label:"Сапарева баня",lat:42.28997,lon:23.26863},
+  {name:"Свети Влас",label:"Свети Влас",lat:42.7134,lon:27.75875},
+  {name:"Свиленград",label:"Свиленград",lat:41.76549,lon:26.20194},
+  {name:"Свищов",label:"Свищов",lat:43.6196,lon:25.3504},
+  {name:"Своге",label:"Своге",lat:42.96208,lon:23.34392},
+  {name:"Севлиево",label:"Севлиево",lat:43.02669,lon:25.1034},
+  {name:"Сеново",label:"Сеново",lat:43.64958,lon:26.36356},
+  {name:"Септември",label:"Септември",lat:42.20682,lon:24.13295},
+  {name:"Силистра",label:"Силистра",lat:44.1167,lon:27.2667},
+  {name:"Симеоновград",label:"Симеоновград",lat:42.03499,lon:25.831},
+  {name:"Симитли",label:"Симитли",lat:41.8833,lon:23.1167},
+  {name:"Славяново",label:"Славяново",lat:43.46504,lon:24.8715},
+  {name:"Сливен",label:"Сливен",lat:42.68165,lon:26.32287},
+  {name:"Сливница",label:"Сливница",lat:42.85197,lon:23.03787},
+  {name:"Сливо поле",label:"Сливо поле",lat:43.94376,lon:26.20452},
+  {name:"Смолян",label:"Смолян",lat:41.57441,lon:24.71013},
+  {name:"Смядово",label:"Смядово",lat:43.06343,lon:27.01333},
+  {name:"Созопол",label:"Созопол",lat:42.41726,lon:27.69618},
+  {name:"Сопот",label:"Сопот",lat:42.65389,lon:24.7548},
+  {name:"София",label:"София",lat:42.69784,lon:23.32167},
+  {name:"Средец",label:"Средец",lat:42.34519,lon:27.18125},
+  {name:"Стамболийски",label:"Стамболийски",lat:42.13331,lon:24.53767},
+  {name:"Стара Загора",label:"Стара Загора",lat:42.42578,lon:25.63446},
+  {name:"Стражица",label:"Стражица",lat:43.2333,lon:25.9667},
+  {name:"Стралджа",label:"Стралджа",lat:42.60023,lon:26.68971},
+  {name:"Стрелча",label:"Стрелча",lat:42.50605,lon:24.32099},
+  {name:"Суворово",label:"Суворово",lat:43.33155,lon:27.59122},
+  {name:"Сунгурларе",label:"Сунгурларе",lat:42.76311,lon:26.77346},
+  {name:"Сухиндол",label:"Сухиндол",lat:43.18436,lon:25.16429},
+  {name:"Съединение",label:"Съединение",lat:42.27469,lon:24.54656},
+  {name:"Сърница",label:"Сърница",lat:41.7333,lon:24.0333},
+  {name:"Твърдица",label:"Твърдица",lat:42.70156,lon:25.89604},
+  {name:"Тервел",label:"Тервел",lat:43.74884,lon:27.40718},
+  {name:"Тетевен",label:"Тетевен",lat:42.91869,lon:24.25889},
+  {name:"Тополовград",label:"Тополовград",lat:42.0851,lon:26.33309},
+  {name:"Троян",label:"Троян",lat:42.89037,lon:24.71297},
+  {name:"Трън",label:"Трън",lat:42.8353,lon:22.6517},
+  {name:"Тръстеник",label:"Тръстеник",lat:43.5167,lon:24.4667},
+  {name:"Трявна",label:"Трявна",lat:42.87665,lon:25.49884},
+  {name:"Тутракан",label:"Тутракан",lat:44.0386,lon:26.61951},
+  {name:"Търговище",label:"Търговище",lat:43.24936,lon:26.57274},
+  {name:"Угърчин",label:"Угърчин",lat:43.10623,lon:24.41269},
+  {name:"Хаджидимово",label:"Хаджидимово",lat:41.5222,lon:23.8686},
+  {name:"Харманли",label:"Харманли",lat:41.93041,lon:25.90259},
+  {name:"Хасково",label:"Хасково",lat:41.93444,lon:25.55545},
+  {name:"Хисаря",label:"Хисаря",lat:42.50437,lon:24.70621},
+  {name:"Цар Калоян",label:"Цар Калоян",lat:43.60865,lon:26.23693},
+  {name:"Царево",label:"Царево",lat:42.16955,lon:27.84541},
+  {name:"Чепеларе",label:"Чепеларе",lat:41.72476,lon:24.68562},
+  {name:"Червен бряг",label:"Червен бряг",lat:43.28045,lon:24.08285},
+  {name:"Черноморец",label:"Черноморец",lat:42.44426,lon:27.63832},
+  {name:"Чипровци",label:"Чипровци",lat:43.38444,lon:22.88207},
+  {name:"Чирпан",label:"Чирпан",lat:42.20207,lon:25.32485},
+  {name:"Шабла",label:"Шабла",lat:43.53794,lon:28.53523},
+  {name:"Шивачево",label:"Шивачево",lat:42.68634,lon:26.03057},
+  {name:"Шипка",label:"Шипка",lat:42.71231,lon:25.3329},
+  {name:"Шумен",label:"Шумен",lat:43.27124,lon:26.93613},
+  {name:"Ябланица",label:"Ябланица",lat:43.03235,lon:24.09919},
+  {name:"Якоруда",label:"Якоруда",lat:42.01781,lon:23.66884},
+  {name:"Ямбол",label:"Ямбол",lat:42.4842,lon:26.5035},
+  {name:"гара Бов",label:"гара Бов",lat:43.02142,lon:23.35306},
+  {name:"гара Лакатник",label:"гара Лакатник",lat:43.08003,lon:23.37429}
+];
+
+const CITY_COORDS = [
+  { name:"София",   lat:42.6977, lon:23.3219 },
+  { name:"Пловдив",  lat:42.1354, lon:24.7453 },
+  { name:"Варна",    lat:43.2141, lon:27.9147 },
+  { name:"Бургас",   lat:42.5048, lon:27.4626 }
+];
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+/* Груба ограждаща кутия на България — извън нея връщаме „Чужбина“,
+   без да гадаем чужда държава без обратно геокодиране. */
+function nearestCity(lat, lon){
+  const inBulgaria = lat >= 41.2 && lat <= 44.3 && lon >= 22.3 && lon <= 28.7;
+  if (!inBulgaria) return { name:"Чужбина", distanceKm:null };
+  let best = null, bestDist = Infinity;
+  CITY_COORDS.forEach(c => {
+    const d = haversineKm(lat, lon, c.lat, c.lon);
+    if (d < bestDist){ bestDist = d; best = c; }
+  });
+  return bestDist <= 60 ? { name:best.name, distanceKm:bestDist } : { name:"Друг град", distanceKm:bestDist };
+}
+
+/* ============================================================
+   ЕКРАН 1 · ДНЕС
+   ============================================================ */
+(function dashboard(){
+  /* Дата */
+  const now = new Date();
+  let dstr = now.toLocaleDateString("bg-BG", { weekday:"long", day:"numeric", month:"long" });
+  dstr = dstr.charAt(0).toUpperCase() + dstr.slice(1);
+  $("dateLine").textContent = "Днес е " + dstr + ". Дръж се.";
+
+  const sky = computeSky(now);
+
+  /* Известие от Космоса — само реално важащи днес; индексът е
+     хеш-базиран (виж dailyIndex по-горе), не линеен брояч, за да
+     не се повтаря в предвидим цикъл, докато условието трае. */
+  const pool = pickDailyPool(sky);
+  let msgIdx = dailyIndex(now, pool.length);
+  const msgEl = $("dailyMsg");
+  msgEl.textContent = pool[msgIdx];
+
+  $("nextMsgBtn").addEventListener("click", () => {
+    msgEl.classList.add("out");
+    setTimeout(() => {
+      msgIdx = (msgIdx + 1) % pool.length;
+      msgEl.textContent = pool[msgIdx];
+      msgEl.classList.remove("out");
+    }, 220);
+  });
+
+  /* Ниво на хаос — от реални транзити и лунна фаза */
+  function chaosLabel(v){
+    for (const b of CHAOS_BANDS){ if (v <= b.max) return b.label; }
+    return CHAOS_BANDS[CHAOS_BANDS.length - 1].label;
+  }
+  function renderChaos(v){
+    $("chaosBar").setAttribute("aria-valuenow", v);
+    requestAnimationFrame(() => { $("chaosFill").style.width = v + "%"; });
+    countUp($("chaosNum"), v, 1400, "%");
+    setTimeout(() => { $("chaosTag").textContent = chaosLabel(v); }, 450);
+  }
+  const score = chaosScore(sky);
+  renderChaos(score);
+
+  /* Реалното небе не се сменя от клик — сменя се само коментарът */
+  $("chaosBtn").addEventListener("click", () => {
+    renderChaos(score);
+    toast(REROLL_COMMENTS[Math.floor(Math.random() * REROLL_COMMENTS.length)]);
+  });
+
+  renderChips(sky);
+
+  refreshPersonalCard();
+
+  /* Локация — само при изрично действие на потребителя, никога
+     автоматично при зареждане. Градът се определя ЛОКАЛНО (виж
+     nearestCity по-горе) — без външно API повикване, без CORS риск. */
+  const cityLineEl = $("cityLine");
+  const titleEl = $("chaosCardTitle");
+  $("locateBtn").addEventListener("click", () => {
+    if (!("geolocation" in navigator)){
+      cityLineEl.className = "city-line err";
+      cityLineEl.textContent = "Този браузър не поддържа GPS локация.";
+      return;
+    }
+    cityLineEl.className = "city-line pending";
+    cityLineEl.textContent = "Търсим сигнал от Космоса (и от GPS чипа ти)…";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const city = nearestCity(latitude, longitude);
+        const quip = CITIES.find(c => c.name === city.name);
+        titleEl.textContent = "Ниво на хаос в " + (city.name === "Чужбина" || city.name === "Друг град" ? "твоя край" : city.name);
+        cityLineEl.className = "city-line";
+        cityLineEl.textContent = quip ? quip.text : "";
+      },
+      (err) => {
+        cityLineEl.className = "city-line err";
+        const map = {
+          1: "Отказан достъп до локация. Космосът разбира — уважава личното пространство.",
+          2: "Позицията не е достъпна в момента. Опитай пак след малко.",
+          3: "Изтече времето за отговор от GPS. Опитай пак."
+        };
+        cityLineEl.textContent = map[err.code] || "Нещо се обърка с локацията.";
+      },
+      { enableHighAccuracy:false, timeout:10000, maximumAge:600000 }
+    );
+  });
+})();
+
+/* ============================================================
+   ЕКРАН 2 · КОСМИЧЕСКО ДНК — реална натална карта (Вариант А)
+   ============================================================ */
+(function natal(){
+  const STORAGE_KEY = "retrograden_natal_v1";
+  const citySel = $("natalCity");
+  const cityList = $("natalCityList");
+  BULGARIA_TOWNS.forEach(t => {
+    const o = document.createElement("option");
+    o.value = t.label; // за дубликати (Бяла) вече включва областта
+    cityList.appendChild(o);
+  });
+
+  function findTown(inputValue){
+    const v = (inputValue || "").trim();
+    if (!v) return null;
+    return BULGARIA_TOWNS.find(t => t.label === v) || BULGARIA_TOWNS.find(t => t.name === v) || null;
+  }
+
+  const cityHint = $("cityHint");
+  citySel.addEventListener("input", () => {
+    const t = findTown(citySel.value);
+    cityHint.textContent = citySel.value.trim() === "" ? ""
+      : t ? "" : "Не разпознавам този град от списъка с 259 — ще пресметнем Слънце/Луна/планети точно, но без Асцендент и домове.";
+  });
+
+  const noTimeBox = $("natalNoTime");
+  const timeInput = $("natalTime");
+  noTimeBox.addEventListener("change", () => {
+    timeInput.disabled = noTimeBox.checked;
+    if (noTimeBox.checked) timeInput.value = "";
+  });
+
+  function saveData(data){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){ console.warn("localStorage недостъпен:", e); } }
+  function loadData(){ try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; } }
+
+  function fillForm(data){
+    $("natalName").value = data.name || "";
+    $("natalDate").value = data.date || "";
+    if (data.timeKnown){ timeInput.value = data.time || ""; noTimeBox.checked = false; timeInput.disabled = false; }
+    else { timeInput.value = ""; noTimeBox.checked = true; timeInput.disabled = true; }
+    citySel.value = data.cityLabel || "";
+    const t = findTown(citySel.value);
+    cityHint.textContent = citySel.value.trim() === "" ? ""
+      : t ? "" : "Не разпознавам този град от списъка с 259 — ще пресметнем Слънце/Луна/планети точно, но без Асцендент и домове.";
+  }
+
+  function renderChart(data){
+    const cityMatch = findTown(data.cityLabel);
+    const [y, m, d] = data.date.split("-").map(Number);
+    let h = 12, min = 0; // обяд по подразбиране, само за Слънце/Луна/планети — НИКОГА за Асцендент
+    if (data.timeKnown && data.time){
+      const [hh, mm] = data.time.split(":").map(Number);
+      h = hh; min = mm;
+    }
+
+    const canDoHouses = data.timeKnown && !!cityMatch;
+    const chart = cityMatch
+      ? computeNatalChart(y, m, d, h, min, cityMatch.lat, cityMatch.lon)
+      : computeNatalChart(y, m, d, h, min, 42.6977, 23.3219); // ширина/дължина не влияят на Слънце/Луна/планети — виж бележка
+
+    if (!chart){
+      $("natalResult").innerHTML = "<p class=\"disclaimer\">Астрономическото изчисление не се зареди (няма връзка с библиотеката). Презареди страницата.</p>";
+      $("natalResult").classList.remove("hidden");
+      return;
+    }
+
+    const sun = chart.planets.find(p => p.name === "Sun");
+    const moon = chart.planets.find(p => p.name === "Moon");
+    const who = data.name ? esc(data.name) : "безименната легенда";
+
+    let html = "";
+    html += "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2>";
+    html += "<p class=\"result-summary\">Слънце " + SIGNS[sun.signIdx].symbol + " " + sun.sign.name +
+            " · Луна " + SIGNS[moon.signIdx].symbol + " " + moon.sign.name +
+            (canDoHouses ? " · Асцендент " + chart.ascendant.sign.symbol + " " + chart.ascendant.sign.name : "") + "</p>";
+
+    html += "<article class=\"glass card reveal\">" +
+      "<div class=\"rc-top\"><span class=\"rc-sym\">☉</span><div>" +
+      "<p class=\"rc-label\">Слънце · Егото</p>" +
+      "<h3 class=\"rc-sign\">" + sun.sign.name + " " + sun.sign.symbol + " · " + sun.degInSign.toFixed(1) + "°</h3></div></div>" +
+      "<p class=\"rc-text\">" + SIGNS[sun.signIdx].sun + "</p></article>";
+
+    html += "<article class=\"glass card reveal d1\">" +
+      "<div class=\"rc-top\"><span class=\"rc-sym cy\">☾</span><div>" +
+      "<p class=\"rc-label\">Луна · Емоциите (скритите)</p>" +
+      "<h3 class=\"rc-sign\">" + moon.sign.name + " " + moon.sign.symbol + " · " + moon.degInSign.toFixed(1) + "°</h3></div></div>" +
+      "<p class=\"rc-text\">" + SIGNS[moon.signIdx].moon + "</p>" +
+      (!data.timeKnown ? "<p class=\"field-hint\" style=\"margin-top:10px\">Изчислено спрямо обяд, защото не посочи час. Ако си роден точно в деня на смяна на лунния знак, тя може да се различава — добави час по-късно за сигурност.</p>" : "") +
+      "</article>";
+
+    if (canDoHouses){
+      const asc = chart.ascendant;
+      html += "<article class=\"glass card reveal d2\">" +
+        "<div class=\"rc-top\"><span class=\"rc-sym vi\">↑</span><div>" +
+        "<p class=\"rc-label\">Асцендент · Фасадата</p>" +
+        "<h3 class=\"rc-sign\">" + asc.sign.name + " " + asc.sign.symbol + " · " + asc.degInSign.toFixed(1) + "°</h3></div></div>" +
+        "<p class=\"rc-text\">" + asc.sign.asc + "</p></article>";
+
+      html += "<article class=\"glass card reveal d3\">" +
+        "<h2 class=\"card-label\"><span class=\"dot violet\"></span>Пълна карта · Whole Sign домове</h2>" +
+        "<div class=\"chips\">" + chart.planets.map(p =>
+          "<span class=\"chip\">" + p.nameBg + " · " + p.sign.symbol + " " + p.sign.name + " · Дом " + p.house + "</span>"
+        ).join("") + "</div></article>";
+    } else {
+      html += "<article class=\"glass card reveal d2\">" +
+        "<h2 class=\"card-label\"><span class=\"dot\"></span>Асцендент и домове — липсват</h2>" +
+        "<p class=\"rc-text\">" + (!data.timeKnown
+          ? "Нужен е точен час на раждане — Асцендентът се мести с ~1° на всеки 4 минути."
+          : "Нужен е град от сверения списък (координати за Асцендента)."
+        ) + " Добави го през „Редактирай данните“, когато го намериш." + "</p></article>";
+
+      html += "<article class=\"glass card reveal d3\">" +
+        "<h2 class=\"card-label\"><span class=\"dot violet\"></span>Останалите планети</h2>" +
+        "<div class=\"chips\">" + chart.planets.filter(p=>p.name!=="Sun"&&p.name!=="Moon").map(p =>
+          "<span class=\"chip\">" + p.nameBg + " · " + p.sign.symbol + " " + p.sign.name + "</span>"
+        ).join("") + "</div></article>";
+    }
+
+    if (cityMatch){
+      const quip = CITIES.find(c => c.name === cityMatch.name);
+      if (quip) html += "<article class=\"glass card reveal d4\"><h2 class=\"card-label\"><span class=\"dot\"></span>Географска корекция</h2><p class=\"rc-text\" style=\"margin-top:11px\">" + quip.text + "</p></article>";
+    }
+
+    html += "<p class=\"disclaimer reveal\">* Позициите на планетите са реално изчислени (не гадаене). Тълкуванията са за забавление и самоанализ — не са научно доказан метод за предсказване.</p>";
+
+    $("natalResult").innerHTML = html;
+    $("natalResult").classList.remove("hidden");
+    $("natalForm").classList.add("hidden");
+    $("natalEditBtn").classList.remove("hidden");
+    setTimeout(() => $("natalResult").scrollIntoView({ behavior:"smooth", block:"start" }), 80);
+  }
+
+  $("natalBtn").addEventListener("click", () => {
+    const dateVal = $("natalDate").value;
+    if (!dateVal){ toast("Нужна е поне дата на раждане. Космосът смята, не гадае."); return; }
+    const data = {
+      name: $("natalName").value.trim(),
+      date: dateVal,
+      timeKnown: !noTimeBox.checked,
+      time: noTimeBox.checked ? "" : timeInput.value,
+      cityLabel: citySel.value
+    };
+    if (data.timeKnown && !data.time){ toast("Или въведи час, или отбележи „Не знам точния час“."); return; }
+    saveData(data);
+    renderChart(data);
+    if (typeof refreshPersonalCard === "function") refreshPersonalCard();
+  });
+
+  $("natalEditBtn").addEventListener("click", () => {
+    const data = loadData();
+    if (data) fillForm(data);
+    $("natalForm").classList.remove("hidden");
+    $("natalResult").classList.add("hidden");
+    $("natalEditBtn").classList.add("hidden");
+    setTimeout(() => $("natalForm").scrollIntoView({ behavior:"smooth", block:"start" }), 80);
+  });
+
+  /* При зареждане — ако вече имаме запазени данни, показваме картата директно */
+  const existing = loadData();
+  if (existing){ fillForm(existing); renderChart(existing); }
+})();
+
+/* ============================================================
+   ЕКРАН 3 · СЪВМЕСТИМОСТ
+   ============================================================ */
+(function compatibility(){
+  const selA = $("compatA");
+  const selB = $("compatB");
+
+  [selA, selB].forEach((sel) => {
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "— избери зодия —";
+    sel.appendChild(ph);
+    SIGNS.forEach((s, i) => {
+      const o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = s.symbol + " " + s.name + " (" + s.dates + ")";
+      sel.appendChild(o);
+    });
+  });
+
+  function isComplementary(e1, e2){
+    return (e1 === "fire" && e2 === "air") || (e1 === "air" && e2 === "fire") ||
+           (e1 === "earth" && e2 === "water") || (e1 === "water" && e2 === "earth");
+  }
+  function isHard(e1, e2){
+    return (e1 === "fire" && e2 === "water") || (e1 === "water" && e2 === "fire") ||
+           (e1 === "earth" && e2 === "air") || (e1 === "air" && e2 === "earth");
+  }
+
+  /* Симетричен, детерминиран резултат за всяка двойка */
+  function pairScore(a, b){
+    const s = Math.min(a, b), l = Math.max(a, b);
+    const e1 = SIGNS[s].element, e2 = SIGNS[l].element;
+    let base;
+    if (a === b) base = 86;
+    else if (e1 === e2) base = 78;
+    else if (isComplementary(e1, e2)) base = 71;
+    else if (isHard(e1, e2)) base = 46;
+    else base = 55;
+    const jitter = ((Math.imul(s * 31 + l * 17 + s * l * 7 + 13, 2246822519) >>> 0) % 17) - 8;
+    return Math.max(7, Math.min(99, base + jitter));
+  }
+
+  function verdictFor(score){
+    for (const v of VERDICTS){ if (score >= v.min) return v; }
+    return VERDICTS[VERDICTS.length - 1];
+  }
+
+  function animateScore(to){
+    const num = $("scoreNum");
+    const ring = $("scoreRing");
+    const t0 = performance.now(), dur = 1500;
+    function frame(t){
+      const k = Math.min(1, (t - t0) / dur);
+      const v = to * easeOut(k);
+      num.textContent = Math.round(v) + "%";
+      ring.style.background =
+        "conic-gradient(from -90deg, #5ce1ff, #c6ff4a " + v + "%, rgba(255,255,255,.07) " + v + "%)";
+      if (k < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  $("compatBtn").addEventListener("click", () => {
+    if (selA.value === "" || selB.value === ""){
+      toast("Трябват двама души. Такива са правилата на драмата.");
+      return;
+    }
+    const a = Number(selA.value), b = Number(selB.value);
+    const loading = $("compatLoading");
+    const resBox = $("compatResult");
+
+    resBox.classList.add("hidden");
+    resBox.innerHTML = "";
+    loading.classList.remove("hidden");
+    loading.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    let step = 0;
+    $("loadingText").textContent = LOADING_STEPS[0];
+    const stepTimer = setInterval(() => {
+      step = Math.min(step + 1, LOADING_STEPS.length - 1);
+      $("loadingText").textContent = LOADING_STEPS[step];
+    }, 620);
+
+    setTimeout(() => {
+      clearInterval(stepTimer);
+      loading.classList.add("hidden");
+
+      const score = pairScore(a, b);
+      const verdict = verdictFor(score);
+      const key = [SIGNS[a].element, SIGNS[b].element].sort().join("+");
+      const dyn = ELEMENT_DYNAMICS[key];
+
+      const flags = [];
+      flags.push({ label: SIGNS[a].symbol + " " + SIGNS[a].name + ":", text: SIGNS[a].flag });
+      if (a !== b){
+        flags.push({ label: SIGNS[b].symbol + " " + SIGNS[b].name + ":", text: SIGNS[b].flag });
+      } else {
+        flags.push({ label: "Двама " + SIGNS[a].name + ":", text: "Пълна хармония или огледален ад. Средно положение науката не познава." });
+      }
+      flags.push({ label: "Динамиката:", text: dyn });
+
+      let html = "";
+      html += "<article class=\"glass card score-card reveal\">" +
+        "<div class=\"score-wrap\"><div class=\"score-ring\" id=\"scoreRing\"></div>" +
+        "<div class=\"score-num\" id=\"scoreNum\">0%</div></div>" +
+        "<h3 class=\"v-title\">" + verdict.title + "</h3>" +
+        "<p class=\"v-text\">" + verdict.text + "</p>" +
+        "<p class=\"pair-line\">" + SIGNS[a].symbol + " " + SIGNS[a].name + " × " +
+        SIGNS[b].symbol + " " + SIGNS[b].name + "</p></article>";
+
+      html += "<article class=\"glass card reveal d1\">" +
+        "<h2 class=\"card-label flag\">🚩 Космически Red Flags</h2><ul class=\"flags\">";
+      for (const f of flags){
+        html += "<li><span class=\"flag-ico\">🚩</span><p><b>" + f.label + "</b> " + f.text + "</p></li>";
+      }
+      html += "</ul></article>";
+
+      html += "<article class=\"glass card reveal d2\">" +
+        "<h2 class=\"card-label\"><span class=\"dot\"></span>Съвет от Космоса</h2>" +
+        "<p class=\"advice-text\">" + verdict.advice + "</p></article>";
+
+      resBox.innerHTML = html;
+      resBox.classList.remove("hidden");
+      animateScore(score);
+      setTimeout(() => resBox.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }, 2200);
+  });
+})();
+</script>
+</body>
+</html>
