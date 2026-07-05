@@ -296,6 +296,22 @@ select.field option{background:#0b0d22;color:var(--text)}
   text-shadow:0 0 12px rgba(198,255,74,.45);
 }
 
+/* ---------- v1.5: Героят „Ретрограден" (космическо око) ---------- */
+.retro-icon{display:inline-block;vertical-align:middle}
+.retro-slot{margin-left:auto;line-height:0}
+.ob-hero{text-align:center;margin:4px 0 10px}
+.retro-icon-animated .retro-pupil{
+  transform-box:fill-box;transform-origin:center;
+  animation:pupilPulse 3s ease-in-out infinite;
+}
+@keyframes pupilPulse{
+  0%,100%{transform:scale(1);opacity:1}
+  50%{transform:scale(1.2);opacity:.85}
+}
+@media (prefers-reduced-motion: reduce){
+  .retro-icon-animated .retro-pupil{animation:none}
+}
+
 /* ---------- v1.5: Сравни / Профил / Комбинация ---------- */
 .combine-divider{
   display:flex;align-items:center;gap:12px;margin:22px 2px 18px;
@@ -363,8 +379,8 @@ select.field option{background:#0b0d22;color:var(--text)}
       <p class="date-line" id="dateLine"></p>
 
       <article class="glass card reveal">
-        <h2 class="card-label"><span class="dot"></span>Известие от Космоса</h2>
-        <p class="cosmic-msg fade-swap" id="dailyMsg"></p>
+        <h2 class="card-label"><span class="dot"></span>Известие от Космоса<span class="retro-slot" id="dailyMsgIcon" aria-hidden="true"></span></h2>
+        <p class="cosmic-msg fade-swap" id="dailyMsg" aria-live="polite"></p>
         <p class="field-hint hidden" id="dailyMsgHint"></p>
         <button class="ghost-btn" id="nextMsgBtn" type="button">Друго известие ↻</button>
       </article>
@@ -373,7 +389,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <h2 class="card-label"><span class="dot cyan"></span><span id="chaosCardTitle">Ниво на хаос в България</span></h2>
         <div class="chaos-top">
           <span class="chaos-num" id="chaosNum">0%</span>
-          <span class="chaos-tag" id="chaosTag">Космосът калибрира сензорите…</span>
+          <span class="chaos-tag" id="chaosTag" aria-live="polite">Космосът калибрира сензорите…</span>
         </div>
         <div class="bar" role="progressbar" aria-label="Ниво на хаос" aria-valuemin="0" aria-valuemax="100" id="chaosBar">
           <div class="fill" id="chaosFill"></div>
@@ -481,6 +497,7 @@ select.field option{background:#0b0d22;color:var(--text)}
     <!-- ================= ЕКРАН 0: ONBOARDING (първо посещение) ================= -->
     <section id="screen-onboarding" class="screen" role="tabpanel" aria-label="Регистрация">
       <article class="glass card d1">
+        <div class="ob-hero" id="obHero" aria-hidden="true"></div>
         <h2 class="screen-title">Космосът има <span class="grad">мнение</span>.</h2>
         <p class="screen-sub">Искаш ли да го чуеш? Трябват ни данните ти. Спокойно — не ги продаваме. Нямаме на кого.</p>
 
@@ -2582,6 +2599,38 @@ function showCombinationResult(result){
     acceptBtn.disabled = false;
     acceptBtn.textContent = "Сравни ни →";
   });
+})();
+
+/* ============================================================
+   v1.5 · ГЕРОЯТ „РЕТРОГРАДЕН" — космическо око (SVG).
+   idSuffix параметризира gradient ID-тата: няколко екземпляра на
+   страница иначе се бият по ID и споделят първите дефиниции.
+   Палитра: Cyan/Acid/Nebula — от короните на проекта.
+   ============================================================ */
+function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
+  const animClass = animate ? "retro-icon-animated" : "";
+  const g1 = "retroGrad1_" + idSuffix, g2 = "retroGrad2_" + idSuffix, g3 = "retroGrad3_" + idSuffix;
+  return '<svg class="retro-icon ' + animClass + '" width="' + size + '" height="' + size + '" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<ellipse cx="50" cy="50" rx="42" ry="38" stroke="url(#' + g1 + ')" stroke-width="2" fill="none" opacity=".4"/>' +
+    '<ellipse cx="50" cy="50" rx="36" ry="24" fill="#0A0E2A" stroke="url(#' + g2 + ')" stroke-width="1.5"/>' +
+    '<ellipse cx="50" cy="50" rx="22" ry="22" fill="url(#' + g3 + ')"/>' +
+    '<circle class="retro-pupil" cx="50" cy="50" r="10" fill="#C6FF4A"/>' +
+    '<circle cx="44" cy="44" r="3" fill="#EEF0FF" opacity=".7"/>' +
+    '<defs>' +
+    '<radialGradient id="' + g1 + '"><stop offset="0%" stop-color="#6A3DF5" stop-opacity=".6"/><stop offset="100%" stop-color="#6A3DF5" stop-opacity="0"/></radialGradient>' +
+    '<linearGradient id="' + g2 + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#5CE1FF"/><stop offset="100%" stop-color="#6A3DF5"/></linearGradient>' +
+    '<radialGradient id="' + g3 + '"><stop offset="0%" stop-color="#5CE1FF" stop-opacity=".8"/><stop offset="100%" stop-color="#6A3DF5" stop-opacity=".4"/></radialGradient>' +
+    '</defs></svg>';
+}
+
+/* Интеграция на ≥3 места: лого, „Известие от Космоса", onboarding */
+(function retroHero(){
+  const logoStar = document.querySelector(".logo-star");
+  if (logoStar) logoStar.innerHTML = retroIconSVG(17, true, "logo");
+  const msgIcon = $("dailyMsgIcon");
+  if (msgIcon) msgIcon.innerHTML = retroIconSVG(22, true, "daily");
+  const obHero = $("obHero");
+  if (obHero) obHero.innerHTML = retroIconSVG(56, true, "ob");
 })();
 
 /* ============================================================
