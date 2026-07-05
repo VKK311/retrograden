@@ -10,6 +10,24 @@
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- Реални астрономически изчисления (ретроградни планети, лунна фаза/знак) — Astronomy Engine, отворен код -->
 <script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js"></script>
+<!-- Supabase (профили + покани за Космическа комбинация). Незадължителен:
+     без него или без конфигурация приложението работи изцяло локално
+     (file://), само облачните функции деградират честно. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* НАСТРОЙКА: замени двете стойности с реалните от Supabase Dashboard
+   (Project Settings → API). SQL схемата е в supabase_schema.sql в
+   корена на репото. Докато стойностите са placeholder-и, клиентът
+   остава null и всички облачни функции се изключват тихо. */
+const SUPABASE_URL = "https://XXXXX.supabase.co";
+const SUPABASE_ANON_KEY = "PASTE-ANON-KEY-HERE";
+let supabaseClient = null;
+try {
+  if (typeof supabase !== "undefined" && !SUPABASE_URL.includes("XXXXX") && !SUPABASE_ANON_KEY.startsWith("PASTE")){
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch(e){ console.warn("Supabase клиентът не се създаде:", e); }
+</script>
 <style>
 /* ============================================================
    РЕТРОГРАДЕН · v0.1 · Кинематографична космическа система
@@ -409,6 +427,36 @@ select.field option{background:#0b0d22;color:var(--text)}
 
       <div id="compatResult" class="hidden"></div>
     </section>
+
+    <!-- ================= ЕКРАН 0: ONBOARDING (първо посещение) ================= -->
+    <section id="screen-onboarding" class="screen">
+      <article class="glass card d1">
+        <h2 class="screen-title">Космосът има <span class="grad">мнение</span>.</h2>
+        <p class="screen-sub">Искаш ли да го чуеш? Трябват ни данните ти. Спокойно — не ги продаваме. Нямаме на кого.</p>
+
+        <label class="f-label" for="obName">Как да те наричаме?</label>
+        <input class="field" id="obName" type="text" maxlength="30" placeholder="Твоето име…" autocomplete="given-name">
+
+        <label class="f-label" for="obDate">Кога се появи на Земята?</label>
+        <input class="field" id="obDate" type="date">
+
+        <label class="f-label" for="obTime">Точен час (за Асцендента)</label>
+        <input class="field" id="obTime" type="time">
+        <label class="checkbox-row">
+          <input type="checkbox" id="obNoTime">
+          <span>Не знам часа — Космосът ще работи с каквото има</span>
+        </label>
+
+        <label class="f-label" for="obCity">Къде?</label>
+        <input class="field" id="obCity" type="text" list="obCityList" autocomplete="off" placeholder="Търси сред 259 града…">
+        <datalist id="obCityList"></datalist>
+        <p class="field-hint" id="obCityHint"></p>
+
+        <button class="btn-primary" id="obSubmit" type="button">Влез в Космоса →</button>
+      </article>
+
+      <p class="foot" style="padding-bottom:24px">✦ Данните живеят на телефона ти. Космосът е виждал по-лоши тайни.</p>
+    </section>
   </main>
 
   <footer class="foot">Ретрограден v0.1 · Космосът не носи юридическа отговорност за взети решения, пратени съобщения и купени билети.</footer>
@@ -789,19 +837,29 @@ function toast(msg){
 
 /* ============================================================
    НАВИГАЦИЯ
+   showScreen() е единственият вход за смяна на екран — ползва се
+   и от табовете, и програмно (onboarding, комбинация-резултат).
+   Табът се маркира само ако екранът има таб; onboarding крие
+   цялата лента.
    ============================================================ */
-document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
-    const target = $(btn.dataset.target);
-    target.classList.remove("active");
-    void target.offsetWidth; /* рестарт на анимацията */
-    target.classList.add("active");
-    if (btn.dataset.target === "screen-today" && typeof refreshPersonalCard === "function") refreshPersonalCard();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  const target = $(id);
+  if (!target) return;
+  void target.offsetWidth; /* рестарт на анимацията */
+  target.classList.add("active");
+  document.querySelectorAll(".tab").forEach((b) => {
+    const isActive = b.dataset.target === id;
+    b.classList.toggle("active", isActive);
+    b.setAttribute("aria-selected", isActive ? "true" : "false");
   });
+  const bar = document.querySelector(".tabbar");
+  if (bar) bar.classList.toggle("hidden", id === "screen-onboarding");
+  if (id === "screen-today" && typeof refreshPersonalCard === "function") refreshPersonalCard();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => showScreen(btn.dataset.target));
 });
 
 /* ============================================================
@@ -1726,6 +1784,8 @@ function nearestCity(lat, lon){
     if (data.timeKnown && !data.time){ toast("Или въведи час, или отбележи „Не знам точния час“."); return; }
     saveData(data);
     renderChart(data);
+    /* Мост към профила (v1.5): наталните данни са една истина навсякъде */
+    if (typeof updateProfileFromNatalData === "function") updateProfileFromNatalData(data);
     if (typeof refreshPersonalCard === "function") refreshPersonalCard();
   });
 
@@ -1741,6 +1801,13 @@ function nearestCity(lat, lon){
   /* При зареждане — ако вече имаме запазени данни, показваме картата директно */
   const existing = loadData();
   if (existing){ fillForm(existing); renderChart(existing); }
+
+  /* v1.5: onboarding записва натални данни отвън — това презарежда
+     екрана, без да дублираме логиката му */
+  window.natalSyncFromStorage = function(){
+    const d = loadData();
+    if (d){ fillForm(d); renderChart(d); }
+  };
 })();
 
 /* ============================================================
@@ -1870,6 +1937,192 @@ function nearestCity(lat, lon){
       animateScore(score);
       setTimeout(() => resBox.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     }, 2200);
+  });
+})();
+
+/* ============================================================
+   v1.5 · ПРОФИЛ — localStorage е първичен, Supabase е backup.
+   Без конфигуриран Supabase всичко тук работи локално; облачните
+   функции просто мълчат (виж конфигурацията в <head>).
+   ============================================================ */
+const PROFILE_KEY = "retrograden_profile_v1";
+const NATAL_KEY = "retrograden_natal_v1"; /* същият ключ ползва екран „Космическо ДНК" */
+
+function getLocalProfile(){
+  try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function saveLocalProfile(p){
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+  catch(e){ console.warn("localStorage недостъпен:", e); }
+}
+function generateUserId(){
+  return "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+async function syncProfileToCloud(profile){
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from("profiles").upsert({
+      id: profile.id,
+      display_name: profile.name,
+      email: profile.email || null,
+      birth_date: profile.birthDate,
+      birth_time: profile.birthTime || null,
+      birth_city: profile.city,
+      birth_lat: profile.lat,
+      birth_lon: profile.lon,
+      natal_chart: profile.chart,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e){ console.warn("Supabase sync не мина:", e); }
+}
+
+async function loadProfileFromCloud(userId){
+  if (!supabaseClient) return null;
+  try {
+    const { data } = await supabaseClient.from("profiles").select("*").eq("id", userId).single();
+    return data || null;
+  } catch(e){ return null; }
+}
+
+/* Изгражда профил от форма + изчислена карта; пише И ДВАТА
+   localStorage ключа (профил + натални данни за екран „ДНК"),
+   за да има една истина навсякъде. */
+function buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town }){
+  const [y, m, d] = birthDate.split("-").map(Number);
+  let h = 12, min = 0; /* обяд по подразбиране — само за Слънце/Луна/планети, НИКОГА за Асцендент */
+  if (timeKnown && birthTime){ const [hh, mm] = birthTime.split(":").map(Number); h = hh; min = mm; }
+  const chart = computeNatalChart(y, m, d, h, min, town.lat, town.lon);
+  const existing = getLocalProfile();
+  const profile = {
+    id: existing && existing.id ? existing.id : generateUserId(),
+    name,
+    birthDate,
+    birthTime: timeKnown ? birthTime : "",
+    timeKnown: !!timeKnown,
+    city: town.label, lat: town.lat, lon: town.lon,
+    chart,
+    updatedAt: new Date().toISOString()
+  };
+  saveLocalProfile(profile);
+  try {
+    localStorage.setItem(NATAL_KEY, JSON.stringify({
+      name, date: birthDate, timeKnown: !!timeKnown,
+      time: timeKnown ? birthTime : "", cityLabel: town.label
+    }));
+  } catch(e){}
+  syncProfileToCloud(profile); /* async, не блокира UI */
+  return profile;
+}
+
+/* Мост от екран „ДНК": редакция там опреснява и профила */
+function updateProfileFromNatalData(data){
+  const town = BULGARIA_TOWNS.find(t => t.label === data.cityLabel) || BULGARIA_TOWNS.find(t => t.name === data.cityLabel);
+  if (!town || !data.date) return; /* без град от списъка няма координати за профил */
+  buildAndSaveProfile({
+    name: data.name || "Безименна легенда",
+    birthDate: data.date,
+    birthTime: data.time || "",
+    timeKnown: !!data.timeKnown,
+    town
+  });
+}
+
+/* ============================================================
+   v1.5 · ONBOARDING
+   ============================================================ */
+(function onboarding(){
+  const citySel = $("obCity"), cityList = $("obCityList"), cityHint = $("obCityHint");
+  const noTime = $("obNoTime"), timeInput = $("obTime");
+
+  BULGARIA_TOWNS.forEach(t => {
+    const o = document.createElement("option");
+    o.value = t.label; /* за дубликати (Бяла) включва областта */
+    cityList.appendChild(o);
+  });
+  function findTown(v){
+    v = (v || "").trim();
+    if (!v) return null;
+    return BULGARIA_TOWNS.find(t => t.label === v) || BULGARIA_TOWNS.find(t => t.name === v) || null;
+  }
+
+  noTime.addEventListener("change", () => {
+    timeInput.disabled = noTime.checked;
+    if (noTime.checked) timeInput.value = "";
+  });
+  citySel.addEventListener("input", () => {
+    cityHint.textContent = citySel.value.trim() === "" ? ""
+      : findTown(citySel.value) ? "" : "Избери град от списъка — Космосът иска координати, не поезия.";
+  });
+
+  $("obSubmit").addEventListener("click", () => {
+    const name = $("obName").value.trim();
+    const birthDate = $("obDate").value;
+    const timeKnown = !noTime.checked;
+    const birthTime = timeKnown ? timeInput.value : "";
+    const town = findTown(citySel.value);
+
+    if (!name){ toast("Име трябва. Псевдоним също върши работа — Космосът не проверява лични карти."); return; }
+    if (!birthDate){ toast("Без дата на раждане Космосът само свива рамене."); return; }
+    if (timeKnown && !birthTime){ toast("Или въведи час, или признай, че не го знаеш. И двете са достойни."); return; }
+    if (!town){ toast("Градът не е от списъка с 259. Космосът иска координати."); return; }
+
+    const profile = buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town });
+    if (!profile.chart){
+      toast("Астрономията не се зареди — картата ще се изчисли при следващото отваряне с интернет.");
+    }
+    if (typeof natalSyncFromStorage === "function") natalSyncFromStorage();
+    if (typeof refreshPersonalCard === "function") refreshPersonalCard();
+    showScreen("screen-today");
+  });
+})();
+
+/* ============================================================
+   v1.5 · INIT ROUTER — кой екран при зареждане.
+   Тича последен: всички IIFE-та по-горе вече са закачили UI-а си.
+   ============================================================ */
+(function initRouter(){
+  let profile = getLocalProfile();
+
+  /* Миграция: съществуващ потребител с натални данни отпреди v1.5 —
+     не го връщаме през onboarding, изграждаме профила тихо. */
+  if (!profile){
+    try {
+      const legacy = JSON.parse(localStorage.getItem(NATAL_KEY) || "null");
+      if (legacy && legacy.date){
+        const town = BULGARIA_TOWNS.find(t => t.label === legacy.cityLabel) || BULGARIA_TOWNS.find(t => t.name === legacy.cityLabel);
+        if (town){
+          profile = buildAndSaveProfile({
+            name: legacy.name || "Безименна легенда",
+            birthDate: legacy.date,
+            birthTime: legacy.time || "",
+            timeKnown: !!legacy.timeKnown,
+            town
+          });
+        }
+      }
+    } catch(e){}
+  }
+
+  if (!profile){
+    showScreen("screen-onboarding");
+    return;
+  }
+
+  /* Има профил → оставаме на „Днес" (активен по подразбиране), но
+     питаме облака дали пази по-нова версия (non-blocking). Локалният
+     е първичен — заместваме само при реално по-нов updated_at. */
+  loadProfileFromCloud(profile.id).then(cloud => {
+    if (!cloud || !cloud.natal_chart) return;
+    const cloudNewer = cloud.updated_at && (!profile.updatedAt || new Date(cloud.updated_at) > new Date(profile.updatedAt));
+    if (!cloudNewer) return;
+    saveLocalProfile({
+      id: cloud.id, name: cloud.display_name, birthDate: cloud.birth_date,
+      birthTime: cloud.birth_time || "", timeKnown: !!cloud.birth_time,
+      city: cloud.birth_city, lat: Number(cloud.birth_lat), lon: Number(cloud.birth_lon),
+      chart: cloud.natal_chart, updatedAt: cloud.updated_at
+    });
   });
 })();
 </script>
