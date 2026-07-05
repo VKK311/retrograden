@@ -322,6 +322,7 @@ select.field option{background:#0b0d22;color:var(--text)}
       <article class="glass card reveal">
         <h2 class="card-label"><span class="dot"></span>Известие от Космоса</h2>
         <p class="cosmic-msg fade-swap" id="dailyMsg"></p>
+        <p class="field-hint hidden" id="dailyMsgHint"></p>
         <button class="ghost-btn" id="nextMsgBtn" type="button">Друго известие ↻</button>
       </article>
 
@@ -1372,6 +1373,24 @@ function nearestCity(lat, lon){
 (function dashboard(){
   const dateLineEl = $("dateLine");
   const msgEl = $("dailyMsg");
+  const msgHintEl = $("dailyMsgHint");
+
+  /* Обяснява защо съобщението се е сменило само̀ (без клик на "Друго
+     известие"), между две автоматични обновявания в рамките на СЪЩИЯ
+     ден — най-често защото лунната фаза/знак или посоката на планета
+     са пресекли граница между два тика на часовия таймер. */
+  function describeSkyChange(oldSky, newSky){
+    if (!oldSky || !newSky) return null;
+    const reasons = [];
+    if (oldSky.phase.key !== newSky.phase.key) reasons.push("Луната смени фаза");
+    if (oldSky.moonSign.name !== newSky.moonSign.name) reasons.push("Луната влезе в нов знак");
+    if (oldSky.mercuryRetro !== newSky.mercuryRetro) reasons.push("Меркурий смени посока");
+    if (oldSky.venusRetro !== newSky.venusRetro) reasons.push("Венера смени посока");
+    if (oldSky.marsRetro !== newSky.marsRetro) reasons.push("Марс смени посока");
+    if (oldSky.jupiterRetro !== newSky.jupiterRetro) reasons.push("Юпитер смени посока");
+    if (oldSky.saturnRetro !== newSky.saturnRetro) reasons.push("Сатурн смени посока");
+    return reasons.length ? reasons.join(", ") : null;
+  }
 
   /* Ниво на хаос — от реални транзити и лунна фаза */
   function chaosLabel(v){
@@ -1385,13 +1404,15 @@ function nearestCity(lat, lon){
     setTimeout(() => { $("chaosTag").textContent = chaosLabel(v); }, 450);
   }
 
-  let pool, msgIdx, score, lastComputedDateStr;
+  let pool, msgIdx, score, lastComputedDateStr, lastSky, lastMsgText;
 
   /* Пълно преизчисление спрямо дадена дата — веднъж при зареждане,
      после автоматично при смяна на деня и на всеки 60 минути (виж
      visibilitychange по-долу), за да не замръзват данните, ако табът
      стои отворен с дни. */
   function renderForDate(d){
+    const sameDayAsBefore = lastComputedDateStr === d.toDateString();
+
     let dstr = d.toLocaleDateString("bg-BG", { weekday:"long", day:"numeric", month:"long" });
     dstr = dstr.charAt(0).toUpperCase() + dstr.slice(1);
     dateLineEl.textContent = "Днес е " + dstr + ". Дръж се.";
@@ -1403,7 +1424,23 @@ function nearestCity(lat, lon){
        не се повтаря в предвидим цикъл, докато условието трае. */
     pool = pickDailyPool(sky);
     msgIdx = dailyIndex(d, pool.length);
-    msgEl.textContent = pool[msgIdx];
+    const newMsgText = pool[msgIdx];
+
+    /* Ако съобщението реално се смени между два автоматични тика в
+       рамките на СЪЩИЯ ден (не заради смяна на деня — това е
+       очаквано и не се обяснява), покажи кратка причина вместо да
+       смениш текста мълчаливо. При смяна на деня или при първо
+       зареждане подсказката се крие. */
+    if (sameDayAsBefore && lastMsgText !== undefined && newMsgText !== lastMsgText){
+      msgHintEl.textContent = "Обновено — " + (describeSkyChange(lastSky, sky) || "промяна в реалното небе") + ".";
+      msgHintEl.classList.remove("hidden");
+    } else {
+      msgHintEl.classList.add("hidden");
+      msgHintEl.textContent = "";
+    }
+    msgEl.textContent = newMsgText;
+    lastMsgText = newMsgText;
+    lastSky = sky;
 
     score = chaosScore(sky);
     renderChaos(score);
@@ -1419,9 +1456,12 @@ function nearestCity(lat, lon){
 
   $("nextMsgBtn").addEventListener("click", () => {
     msgEl.classList.add("out");
+    msgHintEl.classList.add("hidden");
+    msgHintEl.textContent = "";
     setTimeout(() => {
       msgIdx = (msgIdx + 1) % pool.length;
       msgEl.textContent = pool[msgIdx];
+      lastMsgText = pool[msgIdx];
       msgEl.classList.remove("out");
     }, 220);
   });
