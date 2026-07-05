@@ -435,7 +435,28 @@ select.field option{background:#0b0d22;color:var(--text)}
       <h1 class="screen-title">Космическа <span class="grad">комбинация</span></h1>
       <p class="screen-sub">Двама души. Реални натални карти. Нула милост.</p>
 
-      <div id="combineCloudUI"></div>
+      <article class="glass card">
+        <h2 class="card-label"><span class="dot"></span>Покани някого</h2>
+        <p class="rc-text" style="margin-top:11px">Генерирай код и го прати на човека, чиято карта те интересува. Валиден 7 дни, еднократен — като повечето обещания.</p>
+        <div id="inviteCodeBox" class="hidden">
+          <p class="invite-code" id="inviteCodeText" aria-live="polite"></p>
+          <p class="invite-hint">Прати го или го диктувай. Шест знака, без философия.</p>
+        </div>
+        <div class="btn-row">
+          <button class="ghost-btn" id="inviteGenBtn" type="button">✦ Генерирай покана</button>
+          <button class="ghost-btn hidden" id="inviteCopyBtn" type="button">📋 Копирай</button>
+        </div>
+      </article>
+
+      <article class="glass card">
+        <h2 class="card-label"><span class="dot cyan"></span>Имаш покана?</h2>
+        <label class="f-label" for="inviteCodeInput" style="margin-top:14px">Въведи кода</label>
+        <input class="field code-input" id="inviteCodeInput" type="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="ABC123">
+        <button class="btn-primary" id="inviteAcceptBtn" type="button">Сравни ни →</button>
+      </article>
+
+      <p class="disclaimer">✦ Космосът не гарантира съвместимост. Само забавление.</p>
+      <p class="field-hint hidden" id="combineCloudHint" style="margin:0 4px 10px"></p>
 
       <div class="combine-divider" aria-hidden="true"><span>или по бързата процедура — само по зодия</span></div>
 
@@ -2138,6 +2159,322 @@ function renderProfileScreen(){
     location.reload();
   });
   $("combresultBack").addEventListener("click", () => showScreen("screen-combine"));
+})();
+
+/* ============================================================
+   v1.5 · КОСМИЧЕСКА КОМБИНАЦИЯ — реални карти, покани по код.
+   ВАЖНО за границата на честността: ъглите между планетите са
+   реално изчислени (от наталните дълготи). Класификацията на
+   аспектите ползва СЪЗНАТЕЛНО широки орбиси — всяка двойка получава
+   най-близкия класически аспект, за да има винаги какво да се каже.
+   Точните класически ъгли (0/60/90/120/180) попадат в правилните
+   ленти. Тълкуванието е забавление, не наука — както навсякъде.
+   ============================================================ */
+function getAspect(angleDiff){
+  let d = ((angleDiff % 360) + 360) % 360;
+  if (d > 180) d = 360 - d; /* огледално: 190° е същият ъгъл като 170° */
+  if (d <= 8)   return { name:"съвпад",     strength: 4,  emoji:"⊕" };
+  if (d <= 66)  return { name:"секстил",    strength: 2,  emoji:"⚡" };
+  if (d <= 98)  return { name:"квадратура", strength:-2,  emoji:"⊠" };
+  if (d <= 128) return { name:"тригон",     strength: 3,  emoji:"△" };
+  return { name:"опозиция", strength:-1, emoji:"☍" };
+}
+
+/* Адаптер: пълна натална карта → компактни дълготи за сравнение */
+function comboLons(chart){
+  if (!chart || !chart.planets) return null;
+  const get = (n) => {
+    const p = chart.planets.find(pl => pl.name === n);
+    return p && typeof p.longitude === "number" ? ((p.longitude % 360) + 360) % 360 : null;
+  };
+  const out = { sun:get("Sun"), moon:get("Moon"), mercury:get("Mercury"), venus:get("Venus"), mars:get("Mars") };
+  return out.sun === null ? null : out;
+}
+
+/* Кои двойки сравняваме (вкл. кръстосани — Венера×Марс е класиката).
+   pairKey е канонична: огледалните посоки ползват същите текстове. */
+const COMBO_PAIRS = [
+  { a:"sun",     b:"sun",     pairKey:"Слънце-Слънце",     symA:"☉", symB:"☉" },
+  { a:"moon",    b:"moon",    pairKey:"Луна-Луна",          symA:"☽", symB:"☽" },
+  { a:"sun",     b:"moon",    pairKey:"Слънце-Луна",        symA:"☉", symB:"☽" },
+  { a:"moon",    b:"sun",     pairKey:"Слънце-Луна",        symA:"☽", symB:"☉" },
+  { a:"venus",   b:"mars",    pairKey:"Венера-Марс",        symA:"♀", symB:"♂" },
+  { a:"mars",    b:"venus",   pairKey:"Венера-Марс",        symA:"♂", symB:"♀" },
+  { a:"mars",    b:"mars",    pairKey:"Марс-Марс",          symA:"♂", symB:"♂" },
+  { a:"mercury", b:"mercury", pairKey:"Меркурий-Меркурий",  symA:"☿", symB:"☿" },
+  { a:"venus",   b:"venus",   pairKey:"Венера-Венера",      symA:"♀", symB:"♀" }
+];
+
+function signNameOf(lon){ return SIGNS[Math.floor((((lon % 360) + 360) % 360) / 30)].name; }
+
+function computeCombination(chartA, chartB, nameA, nameB){
+  const lonsA = comboLons(chartA), lonsB = comboLons(chartB);
+  if (!lonsA || !lonsB) return null;
+  const pairings = [];
+  COMBO_PAIRS.forEach(pp => {
+    const lonA = lonsA[pp.a], lonB = lonsB[pp.b];
+    if (lonA === null || lonB === null) return;
+    const aspect = getAspect(lonA - lonB);
+    const signA = signNameOf(lonA), signB = signNameOf(lonB);
+    pairings.push({
+      pairKey: pp.pairKey,
+      symbols: pp.symA + pp.symB,
+      signA, signB,
+      aspect: aspect.name,
+      strength: aspect.strength,
+      emoji: aspect.emoji,
+      comment: getPairingComment(pp.pairKey, signA, signB, aspect.name, nameA, nameB)
+    });
+  });
+  pairings.sort((a, b) => Math.abs(b.strength) - Math.abs(a.strength));
+  const topPairings = pairings.slice(0, 6);
+  const topStrength = topPairings.find(p => p.strength > 0) || topPairings[0];
+  const topChallenge = topPairings.find(p => p.strength < 0) || topPairings[topPairings.length - 1];
+  const totalScore = topPairings.reduce((sum, p) => sum + p.strength, 0);
+  return {
+    nameA, nameB,
+    pairings: topPairings,
+    topStrength, topChallenge,
+    summary: getSummary(totalScore, nameA, nameB),
+    score: totalScore
+  };
+}
+
+/* Текстове — seed вариант; тонът се калибрира от retrograden-voice */
+const COMBO_COMMENTS = [
+  { pair:"Слънце-Слънце", aspect:"съвпад",     templates:["Две Слънца на едно място — {signA} до {signB}. Егото има нужда от разписание за огледалото."] },
+  { pair:"Слънце-Слънце", aspect:"секстил",    templates:["Слънцата ви ({signA} и {signB}) се разбират без преводач. Рядкост, не я коментирайте на глас."] },
+  { pair:"Слънце-Слънце", aspect:"квадратура", templates:["{signA} срещу {signB} в квадратура. Различни светогледи, еднакво упорити — като НАП и счетоводител."] },
+  { pair:"Слънце-Слънце", aspect:"тригон",     templates:["Слънцата ви са в тригон — {signA} и {signB} като приятели, забравили защо са се скарали."] },
+  { pair:"Слънце-Слънце", aspect:"опозиция",   templates:["{signA} срещу {signB} — противоположни лагери. Привличането е реално. Дебатите също."] },
+  { pair:"Луна-Луна",     aspect:"съвпад",     templates:["Луните ви съвпадат — {signA} и {signB}. Емоционален шести сенс. WhatsApp в 3 през нощта е само началото."] },
+  { pair:"Луна-Луна",     aspect:"секстил",    templates:["Луните ви ({signA}, {signB}) се четат взаимно без думи. Икономия на скандали — Космосът одобрява."] },
+  { pair:"Луна-Луна",     aspect:"квадратура", templates:["Луна {signA} срещу Луна {signB} — единият иска прегръдка, другият иска тишина. Едновременно."] },
+  { pair:"Луна-Луна",     aspect:"тригон",     templates:["Луните ви са в тригон. Настроенията ви се синхронизират като лош интернет — но във ваша полза."] },
+  { pair:"Луна-Луна",     aspect:"опозиция",   templates:["Луните ви са в опозиция ({signA}↔{signB}). Емоционални приливи по различни календари. Носете си спасителна жилетка."] },
+  { pair:"Слънце-Луна",   aspect:"съвпад",     templates:["Слънце върху Луна — {nameA} е драмата, {nameB} я чувства. Класическа космическа сделка."] },
+  { pair:"Слънце-Луна",   aspect:"секстил",    templates:["Слънце-{signA} и Луна-{signB} в секстил. Единият грее, другият не изгаря. Договорка на ниво небе."] },
+  { pair:"Слънце-Луна",   aspect:"квадратура", templates:["Слънце {signA} срещу Луна {signB} — волята на единия настъпва чувствата на другия. По разписание."] },
+  { pair:"Слънце-Луна",   aspect:"тригон",     templates:["Слънце-Луна в тригон: {signA} иска сцена, {signB} ръкопляска искрено. Не го разваляйте с анализи."] },
+  { pair:"Слънце-Луна",   aspect:"опозиция",   templates:["Слънце срещу Луна ({signA}↔{signB}). Магнитно е. Изтощително е. Двете едновременно."] },
+  { pair:"Венера-Марс",   aspect:"съвпад",     templates:["Венера върху Марс — {signA} и {signB}. Химията е документирана. Съседите също ще я документират."] },
+  { pair:"Венера-Марс",   aspect:"секстил",    templates:["Венера-{signA}, Марс-{signB} в секстил. Флиртът се получава без усилие. Всичко останало — по тарифа."] },
+  { pair:"Венера-Марс",   aspect:"квадратура", templates:["Венера {signA} срещу Марс {signB}: единият иска нежност, другият иска действие. Класика в жанра."] },
+  { pair:"Венера-Марс",   aspect:"тригон",     templates:["Венера-Марс в тригон ({signA}, {signB}). Искрата е фабрична, не се изисква монтаж."] },
+  { pair:"Венера-Марс",   aspect:"опозиция",   templates:["Венера срещу Марс — привличане по учебник, търкане по инерция. {signA} и {signB} го знаят отвътре."] },
+  { pair:"Марс-Марс",     aspect:"съвпад",     templates:["Два Марса на едно място ({signA}, {signB}). Когато се скарате, съседите записват."] },
+  { pair:"Марс-Марс",     aspect:"секстил",    templates:["Марсовете ви работят в екип — {signA} и {signB}. Опасно продуктивно, най-вече за околните."] },
+  { pair:"Марс-Марс",     aspect:"квадратура", templates:["Марс {signA} срещу Марс {signB} — и двамата палят първи. Пожарната е на 112, за всеки случай."] },
+  { pair:"Марс-Марс",     aspect:"тригон",     templates:["Марсовете ви са в тригон. Енергиите се събират, вместо да се сблъскват. Използвайте за нещо легално."] },
+  { pair:"Марс-Марс",     aspect:"опозиция",   templates:["Марс срещу Марс ({signA}↔{signB}). Всеки спор има две първи места. Никой не взима второто."] }
+];
+
+const COMBO_GENERIC = {
+  "съвпад":     ["{planet} на двама ви е на едно и също място ({signA}). Разбирате се подозрително добре точно там."],
+  "секстил":    ["{planet}: {signA} и {signB} в секстил. Работи от само себе си — не го пипайте."],
+  "квадратура": ["{planet}: {signA} срещу {signB} в квадратура. Търкане има. Наричайте го „характер“."],
+  "тригон":     ["{planet}: {signA} и {signB} в тригон. Тук Космосът е свършил работата вместо вас."],
+  "опозиция":   ["{planet}: {signA} срещу {signB} — противоположни краища на небето. Балансът е възможен. На теория."]
+};
+
+const COMBO_SUMMARIES = {
+  high: ["Космическото ви ДНК резонира. {nameA} и {nameB} — комбинация, която дори Ретрограден одобрява. А той не одобрява почти нищо."],
+  medium: ["Нищо извънредно, нищо катастрофално. {nameA} и {nameB} — като вторник: оцеляваш, но не празнуваш."],
+  low: ["Космосът не препоръчва съвместен наем. Но {nameA} и {nameB} са хора, не планети — историята е пълна с непослушни."]
+};
+
+function getPairingComment(pairKey, signA, signB, aspect, nameA, nameB){
+  const specific = COMBO_COMMENTS.find(c => c.pair === pairKey && c.aspect === aspect);
+  const pool = specific ? specific.templates : (COMBO_GENERIC[aspect] || ["{signA} и {signB} — Космосът вдига рамене, но с интерес."]);
+  const planetLabel = pairKey.split("-")[0];
+  return pool[Math.floor(Math.random() * pool.length)]
+    .replace(/{planet}/g, planetLabel)
+    .replace(/{signA}/g, signA)
+    .replace(/{signB}/g, signB)
+    .replace(/{nameA}/g, nameA)
+    .replace(/{nameB}/g, nameB);
+}
+
+function getSummary(score, nameA, nameB){
+  const tier = score >= 8 ? "high" : score >= 2 ? "medium" : "low";
+  const pool = COMBO_SUMMARIES[tier];
+  return pool[Math.floor(Math.random() * pool.length)]
+    .replace(/{nameA}/g, nameA).replace(/{nameB}/g, nameB);
+}
+
+/* ---------- Покани ---------- */
+function generateInviteCode(){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ"; /* без I и O — бъркат се с 1 и 0 */
+  const digits = "0123456789";
+  let code = "";
+  for (let i = 0; i < 3; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 3; i++) code += digits[Math.floor(Math.random() * digits.length)];
+  return code;
+}
+
+async function createInvite(){
+  const profile = getLocalProfile();
+  if (!profile){ toast("Първо профил. Космосът не сравнява анонимни карти."); return null; }
+  if (!profile.chart){ toast("Картата ти още не е изчислена. Отвори приложението с интернет веднъж."); return null; }
+  if (!supabaseClient){ toast("Комбинацията иска облак, а той не е настроен. Виж supabase_schema.sql."); return null; }
+  const code = generateInviteCode();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { error } = await supabaseClient.from("combination_invites").insert({
+      inviter_id: profile.id,
+      inviter_name: profile.name,
+      code,
+      inviter_chart: profile.chart,
+      expires_at: expiresAt
+    });
+    if (error){ toast("Космосът загуби сигнала. Опитай пак."); return null; }
+    return code;
+  } catch(e){ toast("Космосът загуби сигнала. Опитай пак."); return null; }
+}
+
+async function acceptInvite(rawCode){
+  const profile = getLocalProfile();
+  if (!profile){ toast("Първо създай профил."); showScreen("screen-onboarding"); return; }
+  if (!profile.chart){ toast("Картата ти още не е изчислена. Отвори приложението с интернет веднъж."); return; }
+  if (!supabaseClient){ toast("Комбинацията иска облак, а той не е настроен. Виж supabase_schema.sql."); return; }
+  const code = (rawCode || "").trim().toUpperCase();
+  if (code.length !== 6){ toast("Кодът е 6 знака. Нито повече драма, нито по-малко."); return; }
+
+  let invite = null;
+  try {
+    const { data, error } = await supabaseClient.from("combination_invites").select("*").eq("code", code).single();
+    if (error || !data){ toast("Този код не съществува. Провери го — или помоли за нов."); return; }
+    invite = data;
+  } catch(e){ toast("Космосът загуби сигнала. Опитай пак."); return; }
+
+  if (new Date(invite.expires_at) < new Date()){ toast("Поканата е изтекла. Космосът не чака вечно — 7 дни максимум."); return; }
+  if (invite.used_by){ toast("Този код вече е използван. Кодовете са еднократни, като добрите намерения."); return; }
+  if (invite.inviter_id === profile.id){ toast("Сравняване със себе си дава 100% и екзистенциална криза. Покани друг."); return; }
+
+  try {
+    await supabaseClient.from("combination_invites")
+      .update({ used_by: profile.id, used_at: new Date().toISOString() })
+      .eq("id", invite.id);
+  } catch(e){}
+
+  const result = computeCombination(invite.inviter_chart, profile.chart, invite.inviter_name, profile.name);
+  if (!result){ toast("Едната карта е повредена. Космосът отказва да гадае."); return; }
+
+  try {
+    await supabaseClient.from("combinations").insert({
+      user_a_id: invite.inviter_id,
+      user_b_id: profile.id,
+      user_a_name: invite.inviter_name,
+      user_b_name: profile.name,
+      result_json: result
+    });
+  } catch(e){}
+
+  showCombinationResult(result);
+}
+
+/* ---------- Екран с резултата ---------- */
+function comboPairCard(p, nameA, nameB){
+  return '<div style="padding:12px 2px;border-bottom:1px solid var(--line)">' +
+    '<p class="rc-label">' + esc(p.symbols) + ' ' + esc(p.pairKey) + '</p>' +
+    '<p class="combo-aspect">' + esc(nameA) + ': ' + esc(p.signA) + ' ↔ ' + esc(nameB) + ': ' + esc(p.signB) +
+    ' · ' + esc(p.emoji) + ' ' + esc(p.aspect) + '</p>' +
+    '<p class="rc-text" style="margin-top:7px">' + esc(p.comment) + '</p></div>';
+}
+
+function showCombinationResult(result){
+  const { nameA, nameB } = result;
+  let html = "";
+  html += '<h1 class="screen-title" style="text-align:center">Космическа <span class="grad">комбинация</span></h1>';
+  html += '<p class="combo-vs">' + esc(nameA) + ' <span class="grad">×</span> ' + esc(nameB) + '</p>';
+
+  if (result.topStrength){
+    html += '<article class="glass card reveal"><h2 class="card-label"><span class="dot"></span>Върховна черта</h2>' +
+      comboPairCard(result.topStrength, nameA, nameB).replace('border-bottom:1px solid var(--line)', 'border-bottom:none') + '</article>';
+  }
+
+  const middle = result.pairings.filter(p => p !== result.topStrength && p !== result.topChallenge);
+  if (middle.length){
+    html += '<article class="glass card reveal d1"><h2 class="card-label"><span class="dot cyan"></span>Съвпадения</h2>' +
+      middle.map(p => comboPairCard(p, nameA, nameB)).join("") + '</article>';
+  }
+
+  if (result.topChallenge && result.topChallenge !== result.topStrength){
+    html += '<article class="glass card reveal d2"><h2 class="card-label flag">🚩 Внимание</h2>' +
+      comboPairCard(result.topChallenge, nameA, nameB).replace('border-bottom:1px solid var(--line)', 'border-bottom:none') + '</article>';
+  }
+
+  html += '<article class="glass card reveal d3"><h2 class="card-label"><span class="dot violet"></span>Обобщение</h2>' +
+    '<p class="rc-text" style="margin-top:11px">' + esc(result.summary) + '</p></article>';
+
+  html += '<div class="btn-row" style="justify-content:center"><button class="ghost-btn" id="comboShareBtn" type="button">📋 Сподели</button></div>';
+  html += '<p class="disclaimer reveal" style="margin-top:14px">* Ъглите между планетите са реално изчислени от наталните карти. Тълкуването е за забавление — не е научен метод, нито брачен консултант.</p>';
+
+  $("combresultBody").innerHTML = html;
+  showScreen("screen-combresult");
+
+  $("comboShareBtn").addEventListener("click", () => {
+    const text = "Космическа комбинация: " + nameA + " × " + nameB + " — „" + result.summary + "“ · Ретрограден";
+    if (navigator.share){
+      navigator.share({ text }).catch(() => {});
+    } else if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(
+        () => toast("Копирано. Разпространи драмата отговорно."),
+        () => toast("Копирането не мина. Screenshot-ът също е форма на изкуство.")
+      );
+    } else {
+      toast("Браузърът не дава да споделим. Screenshot-ът е твой приятел.");
+    }
+  });
+}
+
+/* ---------- Свързване на екран „Сравни" ---------- */
+(function combineScreen(){
+  const genBtn = $("inviteGenBtn"), copyBtn = $("inviteCopyBtn");
+  const codeBox = $("inviteCodeBox"), codeText = $("inviteCodeText");
+  const acceptBtn = $("inviteAcceptBtn"), codeInput = $("inviteCodeInput");
+  const cloudHint = $("combineCloudHint");
+  let currentCode = null;
+
+  if (!supabaseClient){
+    cloudHint.textContent = "Облакът не е настроен (виж supabase_schema.sql) — кодовете са изключени, бързата процедура по зодия работи.";
+    cloudHint.classList.remove("hidden");
+  }
+
+  genBtn.addEventListener("click", async () => {
+    genBtn.disabled = true;
+    genBtn.textContent = "Космосът пише кода…";
+    const code = await createInvite();
+    genBtn.disabled = false;
+    genBtn.textContent = "✦ Генерирай покана";
+    if (!code) return;
+    currentCode = code;
+    codeText.textContent = code;
+    codeBox.classList.remove("hidden");
+    copyBtn.classList.remove("hidden");
+  });
+
+  copyBtn.addEventListener("click", () => {
+    if (!currentCode) return;
+    const profile = getLocalProfile();
+    const msg = (profile ? profile.name : "Някой") + " те вика за Космическа комбинация. Въведи код " + currentCode + " в Ретрограден.";
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(msg).then(
+        () => toast("Копирано. Сега е техен ход."),
+        () => toast("Копирането не мина — диктувай го, шест знака са.")
+      );
+    } else {
+      toast("Браузърът пази клипборда ревниво. Диктувай кода — шест знака са.");
+    }
+  });
+
+  acceptBtn.addEventListener("click", async () => {
+    acceptBtn.disabled = true;
+    acceptBtn.textContent = "Космосът рови в архива…";
+    await acceptInvite(codeInput.value);
+    acceptBtn.disabled = false;
+    acceptBtn.textContent = "Сравни ни →";
+  });
 })();
 
 /* ============================================================
