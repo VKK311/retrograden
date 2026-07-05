@@ -280,7 +280,7 @@ select.field option{background:#0b0d22;color:var(--text)}
 
 /* ---------- Долна навигация ---------- */
 .tabbar{
-  position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:6;
+  position:fixed;bottom:max(14px, env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:6;
   width:min(430px, calc(100% - 24px));display:flex;gap:6px;padding:8px;border-radius:23px;
 }
 .tab{
@@ -295,6 +295,31 @@ select.field option{background:#0b0d22;color:var(--text)}
   box-shadow:inset 0 0 0 1px rgba(198,255,74,.28), 0 0 20px rgba(198,255,74,.12);
   text-shadow:0 0 12px rgba(198,255,74,.45);
 }
+
+/* ---------- v1.5: Сравни / Профил / Комбинация ---------- */
+.combine-divider{
+  display:flex;align-items:center;gap:12px;margin:22px 2px 18px;
+  color:var(--muted2);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+}
+.combine-divider::before,.combine-divider::after{
+  content:"";flex:1;height:1px;background:var(--line);
+}
+.invite-code{
+  font-family:var(--font-display);font-weight:800;font-size:34px;letter-spacing:.22em;
+  text-align:center;margin:16px 0 6px;
+  background:linear-gradient(92deg,var(--cyan),var(--acid));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 16px rgba(198,255,74,.35));
+  user-select:all;
+}
+.invite-hint{text-align:center;font-size:12px;color:var(--muted2);margin-bottom:4px}
+.code-input{text-transform:uppercase;letter-spacing:.18em;text-align:center;font-family:var(--font-display);font-weight:600}
+.profile-row{display:flex;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.profile-row:last-of-type{border-bottom:none}
+.profile-row .pr-k{color:var(--muted);flex:none}
+.profile-row .pr-v{text-align:right;color:var(--text)}
+.combo-vs{font-family:var(--font-display);font-weight:800;font-size:19px;text-align:center;margin:10px 0 4px}
+.combo-aspect{font-size:12px;color:var(--muted);letter-spacing:.04em;margin-top:2px}
 
 /* ---------- Тоуст ---------- */
 .toast{
@@ -334,7 +359,7 @@ select.field option{background:#0b0d22;color:var(--text)}
 
   <main>
     <!-- ================= ЕКРАН 1: ДНЕС ================= -->
-    <section id="screen-today" class="screen active">
+    <section id="screen-today" class="screen active" role="tabpanel" aria-label="Днес">
       <p class="date-line" id="dateLine"></p>
 
       <article class="glass card reveal">
@@ -375,7 +400,7 @@ select.field option{background:#0b0d22;color:var(--text)}
     </section>
 
     <!-- ================= ЕКРАН 2: КОСМИЧЕСКО ДНК ================= -->
-    <section id="screen-natal" class="screen">
+    <section id="screen-natal" class="screen" role="tabpanel" aria-label="Космическо ДНК">
       <h1 class="screen-title">Космическо <span class="grad">ДНК</span></h1>
       <p class="screen-sub" id="natalSub">Кажи кога и къде си се появил. Космосът ще изчисли, не гадае.</p>
 
@@ -405,10 +430,14 @@ select.field option{background:#0b0d22;color:var(--text)}
       <button class="ghost-btn hidden" id="natalEditBtn" type="button" style="margin-top:14px">✎ Редактирай данните</button>
     </section>
 
-    <!-- ================= ЕКРАН 3: СЪВМЕСТИМОСТ ================= -->
-    <section id="screen-compat" class="screen">
-      <h1 class="screen-title">Съвместимост<span class="grad">.bg</span></h1>
-      <p class="screen-sub">Двама души. Един алгоритъм. Нула милост.</p>
+    <!-- ================= ЕКРАН 3: СРАВНИ (Космическа комбинация + бърза зодия) ================= -->
+    <section id="screen-combine" class="screen" role="tabpanel" aria-label="Сравни">
+      <h1 class="screen-title">Космическа <span class="grad">комбинация</span></h1>
+      <p class="screen-sub">Двама души. Реални натални карти. Нула милост.</p>
+
+      <div id="combineCloudUI"></div>
+
+      <div class="combine-divider" aria-hidden="true"><span>или по бързата процедура — само по зодия</span></div>
 
       <article class="glass card">
         <label class="f-label" for="compatA">Ти</label>
@@ -429,7 +458,7 @@ select.field option{background:#0b0d22;color:var(--text)}
     </section>
 
     <!-- ================= ЕКРАН 0: ONBOARDING (първо посещение) ================= -->
-    <section id="screen-onboarding" class="screen">
+    <section id="screen-onboarding" class="screen" role="tabpanel" aria-label="Регистрация">
       <article class="glass card d1">
         <h2 class="screen-title">Космосът има <span class="grad">мнение</span>.</h2>
         <p class="screen-sub">Искаш ли да го чуеш? Трябват ни данните ти. Спокойно — не ги продаваме. Нямаме на кого.</p>
@@ -457,15 +486,43 @@ select.field option{background:#0b0d22;color:var(--text)}
 
       <p class="foot" style="padding-bottom:24px">✦ Данните живеят на телефона ти. Космосът е виждал по-лоши тайни.</p>
     </section>
+
+    <!-- ================= ЕКРАН 5: ПРОФИЛ ================= -->
+    <section id="screen-profile" class="screen" role="tabpanel" aria-label="Профил">
+      <h1 class="screen-title">Космическо <span class="grad">досие</span></h1>
+      <p class="screen-sub">Данните, по които Космосът те разпознава.</p>
+
+      <article class="glass card">
+        <div id="profileInfo"></div>
+        <div class="btn-row">
+          <button class="ghost-btn" id="profileEditBtn" type="button">✎ Редактирай данните</button>
+          <button class="ghost-btn" id="profileSyncBtn" type="button">↻ Синхронизирай с Космоса</button>
+        </div>
+        <p class="field-hint" id="profileSyncStatus"></p>
+      </article>
+
+      <article class="glass card">
+        <h2 class="card-label"><span class="dot violet"></span>Опасна зона</h2>
+        <p class="rc-text" style="margin-top:11px">Изтриването маха всичко от това устройство. Космосът ще те забрави. НАП — не.</p>
+        <button class="ghost-btn" id="profileDeleteBtn" type="button" style="margin-top:12px">Изтрий локалните данни</button>
+      </article>
+    </section>
+
+    <!-- ================= ЕКРАН 6: РЕЗУЛТАТ ОТ КОМБИНАЦИЯ ================= -->
+    <section id="screen-combresult" class="screen" role="tabpanel" aria-label="Резултат от Космическа комбинация">
+      <button class="ghost-btn" id="combresultBack" type="button" style="margin:8px 0 4px">← Назад към Сравни</button>
+      <div id="combresultBody"></div>
+    </section>
   </main>
 
   <footer class="foot">Ретрограден v0.1 · Космосът не носи юридическа отговорност за взети решения, пратени съобщения и купени билети.</footer>
 </div>
 
-<nav class="tabbar glass" aria-label="Основна навигация">
-  <button class="tab active" data-target="screen-today" type="button"><span class="t-ico">✦</span>Днес</button>
-  <button class="tab" data-target="screen-natal" type="button"><span class="t-ico">☉</span>Космическо ДНК</button>
-  <button class="tab" data-target="screen-compat" type="button"><span class="t-ico">☍</span>Съвместимост</button>
+<nav class="tabbar glass" aria-label="Основна навигация" role="tablist">
+  <button class="tab active" data-target="screen-today" type="button" role="tab" aria-selected="true"><span class="t-ico" aria-hidden="true">✦</span>Днес</button>
+  <button class="tab" data-target="screen-natal" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">☉</span>ДНК</button>
+  <button class="tab" data-target="screen-combine" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">⇄</span>Сравни</button>
+  <button class="tab" data-target="screen-profile" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">◎</span>Профил</button>
 </nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -856,6 +913,7 @@ function showScreen(id){
   const bar = document.querySelector(".tabbar");
   if (bar) bar.classList.toggle("hidden", id === "screen-onboarding");
   if (id === "screen-today" && typeof refreshPersonalCard === "function") refreshPersonalCard();
+  if (id === "screen-profile" && typeof renderProfileScreen === "function") renderProfileScreen();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -2028,6 +2086,59 @@ function updateProfileFromNatalData(data){
     town
   });
 }
+
+/* ============================================================
+   v1.5 · ПРОФИЛ ЕКРАН
+   ============================================================ */
+function renderProfileScreen(){
+  const box = $("profileInfo");
+  const profile = getLocalProfile();
+  if (!profile){
+    box.innerHTML = '<p class="rc-text">Няма профил на това устройство. Космосът не те познава — още.</p>';
+    $("profileSyncStatus").textContent = "";
+    return;
+  }
+  const chart = profile.chart;
+  const sun = chart && chart.planets ? chart.planets.find(p => p.name === "Sun") : null;
+  const moon = chart && chart.planets ? chart.planets.find(p => p.name === "Moon") : null;
+  const rows = [
+    ["Име", esc(profile.name)],
+    ["Роден", esc(profile.birthDate) + (profile.timeKnown && profile.birthTime ? " в " + esc(profile.birthTime) : " · час неизвестен")],
+    ["Град", esc(profile.city)],
+    sun ? ["Слънце", sun.sign.symbol + " " + sun.sign.name] : null,
+    moon ? ["Луна", moon.sign.symbol + " " + moon.sign.name] : null,
+    (chart && chart.ascendant && profile.timeKnown) ? ["Асцендент", chart.ascendant.sign.symbol + " " + chart.ascendant.sign.name] : null
+  ].filter(Boolean);
+  box.innerHTML = rows.map(r =>
+    '<div class="profile-row"><span class="pr-k">' + r[0] + '</span><span class="pr-v">' + r[1] + '</span></div>'
+  ).join("");
+  $("profileSyncStatus").textContent = supabaseClient
+    ? "Облачен архив: включен. Космосът пази копие."
+    : "Облачен архив: изключен (Supabase не е настроен). Всичко живее само тук.";
+}
+
+(function profileScreen(){
+  $("profileEditBtn").addEventListener("click", () => {
+    showScreen("screen-natal");
+    const editBtn = $("natalEditBtn");
+    if (editBtn && !editBtn.classList.contains("hidden")) editBtn.click();
+  });
+  $("profileSyncBtn").addEventListener("click", () => {
+    const profile = getLocalProfile();
+    if (!profile){ toast("Няма какво да синхронизираме. Първо профил."); return; }
+    if (!supabaseClient){ toast("Облакът не е настроен. Космосът работи офлайн — виж supabase_schema.sql."); return; }
+    syncProfileToCloud(profile).then(() => toast("Изпратено към Космоса. Той рядко отговаря, но пази всичко."));
+  });
+  $("profileDeleteBtn").addEventListener("click", () => {
+    if (!confirm("Изтриване на всички локални данни? Наталната карта, профилът — всичко.")) return;
+    try {
+      localStorage.removeItem(PROFILE_KEY);
+      localStorage.removeItem(NATAL_KEY);
+    } catch(e){}
+    location.reload();
+  });
+  $("combresultBack").addEventListener("click", () => showScreen("screen-combine"));
+})();
 
 /* ============================================================
    v1.5 · ONBOARDING
