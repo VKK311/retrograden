@@ -1370,30 +1370,8 @@ function nearestCity(lat, lon){
    ЕКРАН 1 · ДНЕС
    ============================================================ */
 (function dashboard(){
-  /* Дата */
-  const now = new Date();
-  let dstr = now.toLocaleDateString("bg-BG", { weekday:"long", day:"numeric", month:"long" });
-  dstr = dstr.charAt(0).toUpperCase() + dstr.slice(1);
-  $("dateLine").textContent = "Днес е " + dstr + ". Дръж се.";
-
-  const sky = computeSky(now);
-
-  /* Известие от Космоса — само реално важащи днес; индексът е
-     хеш-базиран (виж dailyIndex по-горе), не линеен брояч, за да
-     не се повтаря в предвидим цикъл, докато условието трае. */
-  const pool = pickDailyPool(sky);
-  let msgIdx = dailyIndex(now, pool.length);
+  const dateLineEl = $("dateLine");
   const msgEl = $("dailyMsg");
-  msgEl.textContent = pool[msgIdx];
-
-  $("nextMsgBtn").addEventListener("click", () => {
-    msgEl.classList.add("out");
-    setTimeout(() => {
-      msgIdx = (msgIdx + 1) % pool.length;
-      msgEl.textContent = pool[msgIdx];
-      msgEl.classList.remove("out");
-    }, 220);
-  });
 
   /* Ниво на хаос — от реални транзити и лунна фаза */
   function chaosLabel(v){
@@ -1406,8 +1384,47 @@ function nearestCity(lat, lon){
     countUp($("chaosNum"), v, 1400, "%");
     setTimeout(() => { $("chaosTag").textContent = chaosLabel(v); }, 450);
   }
-  const score = chaosScore(sky);
-  renderChaos(score);
+
+  let pool, msgIdx, score, lastComputedDateStr;
+
+  /* Пълно преизчисление спрямо дадена дата — веднъж при зареждане,
+     после автоматично при смяна на деня и на всеки 60 минути (виж
+     visibilitychange по-долу), за да не замръзват данните, ако табът
+     стои отворен с дни. */
+  function renderForDate(d){
+    let dstr = d.toLocaleDateString("bg-BG", { weekday:"long", day:"numeric", month:"long" });
+    dstr = dstr.charAt(0).toUpperCase() + dstr.slice(1);
+    dateLineEl.textContent = "Днес е " + dstr + ". Дръж се.";
+
+    const sky = computeSky(d);
+
+    /* Известие от Космоса — само реално важащи днес; индексът е
+       хеш-базиран (виж dailyIndex по-горе), не линеен брояч, за да
+       не се повтаря в предвидим цикъл, докато условието трае. */
+    pool = pickDailyPool(sky);
+    msgIdx = dailyIndex(d, pool.length);
+    msgEl.textContent = pool[msgIdx];
+
+    score = chaosScore(sky);
+    renderChaos(score);
+
+    renderChips(sky);
+
+    refreshPersonalCard();
+
+    lastComputedDateStr = d.toDateString();
+  }
+
+  renderForDate(new Date());
+
+  $("nextMsgBtn").addEventListener("click", () => {
+    msgEl.classList.add("out");
+    setTimeout(() => {
+      msgIdx = (msgIdx + 1) % pool.length;
+      msgEl.textContent = pool[msgIdx];
+      msgEl.classList.remove("out");
+    }, 220);
+  });
 
   /* Реалното небе не се сменя от клик — сменя се само коментарът */
   $("chaosBtn").addEventListener("click", () => {
@@ -1415,9 +1432,27 @@ function nearestCity(lat, lon){
     toast(REROLL_COMMENTS[Math.floor(Math.random() * REROLL_COMMENTS.length)]);
   });
 
-  renderChips(sky);
+  /* Тихо обновяване, без toast: при връщане в таба проверяваме дали
+     денят се е сменил спрямо последното изчисление, плюс таймер на
+     60 минути докато табът е видим — планетите не се местят
+     достатъчно бързо, за да оправдаят по-често опресняване. Таймерът
+     се чисти и пресъздава при всяка смяна на видимостта, за да не се
+     трупат успоредни интервали. */
+  let refreshTimer = null;
+  function armRefreshTimer(){
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(() => renderForDate(new Date()), 60 * 60 * 1000);
+  }
+  armRefreshTimer();
 
-  refreshPersonalCard();
+  document.addEventListener("visibilitychange", () => {
+    if (refreshTimer){ clearInterval(refreshTimer); refreshTimer = null; }
+    if (document.visibilityState === "visible"){
+      const today = new Date().toDateString();
+      if (today !== lastComputedDateStr) renderForDate(new Date());
+      armRefreshTimer();
+    }
+  });
 
   /* Локация — само при изрично действие на потребителя, никога
      автоматично при зареждане. Градът се определя ЛОКАЛНО (виж
