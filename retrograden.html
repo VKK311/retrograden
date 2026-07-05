@@ -19,8 +19,8 @@
    (Project Settings → API). SQL схемата е в supabase_schema.sql в
    корена на репото. Докато стойностите са placeholder-и, клиентът
    остава null и всички облачни функции се изключват тихо. */
-const SUPABASE_URL = "https://XXXXX.supabase.co";
-const SUPABASE_ANON_KEY = "PASTE-ANON-KEY-HERE";
+const SUPABASE_URL = "https://hibjsxojihwiwfzqqfdr.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpYmpzeG9qaWh3aXdmenFxZmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyNDgzNzksImV4cCI6MjA5ODgyNDM3OX0.d7S7T__fo3468B5l6r4KEmiTWwpdGg4Dopkn2lKlVdk";
 let supabaseClient = null;
 try {
   if (typeof supabase !== "undefined" && !SUPABASE_URL.includes("XXXXX") && !SUPABASE_ANON_KEY.startsWith("PASTE")){
