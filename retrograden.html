@@ -1180,9 +1180,7 @@ function getSavedNatalChart(){
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data.timeKnown || !data.time || !data.date) return null;
-    const town = (typeof BULGARIA_TOWNS !== "undefined")
-      ? (BULGARIA_TOWNS.find(t => t.label === data.cityLabel) || BULGARIA_TOWNS.find(t => t.name === data.cityLabel))
-      : null;
+    const town = (typeof BULGARIA_TOWNS !== "undefined") ? findTownByLabel(data.cityLabel) : null;
     if (!town) return null;
     const [y, m, d] = data.date.split("-").map(Number);
     const [hh, mm] = data.time.split(":").map(Number);
@@ -1540,6 +1538,22 @@ const BULGARIA_TOWNS = [
   {name:"гара Лакатник",label:"гара Лакатник",lat:43.08003,lon:23.37429}
 ];
 
+/* Единствен източник на истина за търсене на град по свободен текст —
+   ползва се от onboarding, натален екран, легация миграция и профилния
+   мост. Нормализира регистър + повторени/крайни интервали, за да не
+   зависи съвпадението от точен регистър или случаен двоен интервал
+   (лесно за еднословни имена като "София", по-крехко за многословни
+   като "Стара Загора" / "Велико Търново" при свободно писане). */
+function normalizeTownInput(v){
+  return (v || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+function findTownByLabel(v){
+  const norm = normalizeTownInput(v);
+  if (!norm) return null;
+  return BULGARIA_TOWNS.find(t => normalizeTownInput(t.label) === norm) ||
+         BULGARIA_TOWNS.find(t => normalizeTownInput(t.name) === norm) || null;
+}
+
 function haversineKm(lat1, lon1, lat2, lon2){
   const R = 6371, toRad = d => d * Math.PI / 180;
   const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
@@ -1747,11 +1761,7 @@ function nearestCity(lat, lon){
     cityList.appendChild(o);
   });
 
-  function findTown(inputValue){
-    const v = (inputValue || "").trim();
-    if (!v) return null;
-    return BULGARIA_TOWNS.find(t => t.label === v) || BULGARIA_TOWNS.find(t => t.name === v) || null;
-  }
+  function findTown(inputValue){ return findTownByLabel(inputValue); }
 
   const cityHint = $("cityHint");
   citySel.addEventListener("input", () => {
@@ -2114,7 +2124,7 @@ function buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town }){
 
 /* Мост от екран „ДНК": редакция там опреснява и профила */
 function updateProfileFromNatalData(data){
-  const town = BULGARIA_TOWNS.find(t => t.label === data.cityLabel) || BULGARIA_TOWNS.find(t => t.name === data.cityLabel);
+  const town = findTownByLabel(data.cityLabel);
   if (!town || !data.date) return; /* без град от списъка няма координати за профил */
   buildAndSaveProfile({
     name: data.name || "Безименна легенда",
@@ -2645,11 +2655,7 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
     o.value = t.label; /* за дубликати (Бяла) включва областта */
     cityList.appendChild(o);
   });
-  function findTown(v){
-    v = (v || "").trim();
-    if (!v) return null;
-    return BULGARIA_TOWNS.find(t => t.label === v) || BULGARIA_TOWNS.find(t => t.name === v) || null;
-  }
+  function findTown(v){ return findTownByLabel(v); }
 
   noTime.addEventListener("change", () => {
     timeInput.disabled = noTime.checked;
@@ -2695,7 +2701,7 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
     try {
       const legacy = JSON.parse(localStorage.getItem(NATAL_KEY) || "null");
       if (legacy && legacy.date){
-        const town = BULGARIA_TOWNS.find(t => t.label === legacy.cityLabel) || BULGARIA_TOWNS.find(t => t.name === legacy.cityLabel);
+        const town = findTownByLabel(legacy.cityLabel);
         if (town){
           profile = buildAndSaveProfile({
             name: legacy.name || "Безименна легенда",
@@ -2707,6 +2713,16 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
         }
       }
     } catch(e){}
+  }
+
+  /* Защита: профил, който съществува, но няма валидна карта (повреден
+     localStorage запис, прекъснат запис, или изобщо стар формат отпреди
+     профилния слой) не трябва да заключва потребителя на "Днес" без
+     работеща комбинация/ДНК. Изтрий го и подкарай наново през onboarding
+     — по-добре кратко пре-въвеждане, отколкото тих мъртъв край. */
+  if (profile && !profile.chart){
+    try { localStorage.removeItem(PROFILE_KEY); } catch(e){}
+    profile = null;
   }
 
   if (!profile){
