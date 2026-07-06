@@ -77,5 +77,6 @@ CREATE POLICY "Insert combination" ON combinations FOR INSERT WITH CHECK (true);
 -- безопасен за повторно изпълнение.
 -- ============================================================
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE combination_invites ADD COLUMN IF NOT EXISTS inviter_gender TEXT;
 ALTER TABLE combinations ADD COLUMN IF NOT EXISTS context TEXT;

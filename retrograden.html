@@ -3489,9 +3489,9 @@ async function createInvite(){
       inviter_chart: profile.chart,
       expires_at: expiresAt
     });
-    if (error){ toast("Космосът загуби сигнала. Опитай пак."); return null; }
+    if (error){ console.error("[createInvite] Supabase error:", error.message, error.details); toast("Космосът загуби сигнала. Опитай пак."); return null; }
     return code;
-  } catch(e){ toast("Космосът загуби сигнала. Опитай пак."); return null; }
+  } catch(e){ console.error("[createInvite] Exception:", e); toast("Космосът загуби сигнала. Опитай пак."); return null; }
 }
 
 async function acceptInvite(rawCode){
