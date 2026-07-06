@@ -296,6 +296,47 @@ select.field option{background:#0b0d22;color:var(--text)}
   text-shadow:0 0 12px rgba(198,255,74,.45);
 }
 
+/* ---------- v1.6: LIVE индикатор + "обновено в" ---------- */
+.live-badge{
+  display:inline-flex;align-items:center;gap:5px;margin-left:auto;
+  font:700 9px var(--font-display);letter-spacing:.14em;color:#ff5a7a;
+}
+.live-dot{
+  width:8px;height:8px;border-radius:50%;background:#ff3b5c;
+  box-shadow:0 0 8px #ff3b5c;flex:none;
+  animation:livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse{
+  0%,100%{transform:scale(1);opacity:1}
+  50%{transform:scale(1.4);opacity:.6}
+}
+.live-badge.flash{animation:liveFlash .5s ease-out}
+@keyframes liveFlash{
+  0%{transform:scale(1.35)}
+  100%{transform:scale(1)}
+}
+.updated-line{margin-top:10px;font-size:11px;color:var(--muted2);letter-spacing:.02em}
+.moon-track{position:relative;height:4px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden}
+.moon-track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--acid));transition:width .9s cubic-bezier(.22,.9,.25,1)}
+
+.event-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
+.event-row:last-child{border-bottom:none}
+.event-icon{font-size:16px;flex:none;width:22px;text-align:center;line-height:1}
+.event-label{flex:1;color:rgba(238,240,255,.86)}
+.event-when{flex:none;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--muted2);text-transform:uppercase}
+.event-when.today{color:#ff5a7a;animation:livePulse 1.6s ease-in-out infinite}
+.event-when.tomorrow{color:var(--acid)}
+@media (prefers-reduced-motion: reduce){
+  .event-when.today{animation:none}
+}
+
+.what-changed{transition:opacity .6s ease, transform .6s ease}
+.what-changed.fading{opacity:0;transform:translateY(-8px)}
+@media (prefers-reduced-motion: reduce){
+  .live-dot{animation:none}
+  .live-badge.flash{animation:none}
+}
+
 /* ---------- v1.5: Героят „Ретрограден" (космическо око) ---------- */
 .retro-icon{display:inline-block;vertical-align:middle}
 .retro-slot{margin-left:auto;line-height:0}
@@ -378,6 +419,11 @@ select.field option{background:#0b0d22;color:var(--text)}
     <section id="screen-today" class="screen active" role="tabpanel" aria-label="Днес">
       <p class="date-line" id="dateLine"></p>
 
+      <article class="glass card reveal what-changed hidden" id="whatChangedCard" aria-live="polite">
+        <h2 class="card-label"><span class="dot cyan"></span>Откакто последно надникна</h2>
+        <div id="whatChangedLines"></div>
+      </article>
+
       <article class="glass card reveal">
         <h2 class="card-label"><span class="dot"></span>Известие от Космоса<span class="retro-slot" id="dailyMsgIcon" aria-hidden="true"></span></h2>
         <p class="cosmic-msg fade-swap" id="dailyMsg" aria-live="polite"></p>
@@ -386,7 +432,7 @@ select.field option{background:#0b0d22;color:var(--text)}
       </article>
 
       <article class="glass card reveal d1">
-        <h2 class="card-label"><span class="dot cyan"></span><span id="chaosCardTitle">Ниво на хаос в България</span></h2>
+        <h2 class="card-label"><span class="dot cyan"></span><span id="chaosCardTitle">Ниво на хаос в България</span><span class="live-badge" id="liveBadge" aria-hidden="true"><span class="live-dot"></span>LIVE</span></h2>
         <div class="chaos-top">
           <span class="chaos-num" id="chaosNum">0%</span>
           <span class="chaos-tag" id="chaosTag" aria-live="polite">Космосът калибрира сензорите…</span>
@@ -394,6 +440,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <div class="bar" role="progressbar" aria-label="Ниво на хаос" aria-valuemin="0" aria-valuemax="100" id="chaosBar">
           <div class="fill" id="chaosFill"></div>
         </div>
+        <p class="updated-line" id="updatedLine"></p>
         <p class="city-line" id="cityLine"></p>
         <div class="btn-row">
           <button class="ghost-btn" id="chaosBtn" type="button">Преизчисли ⚡</button>
@@ -404,10 +451,16 @@ select.field option{background:#0b0d22;color:var(--text)}
       <article class="glass card reveal d2">
         <h2 class="card-label"><span class="dot violet"></span>Космическа обстановка</h2>
         <div class="chips" id="chipsRow"></div>
+        <div class="moon-track hidden" id="moonTrack" aria-hidden="true"><div class="moon-track-fill" id="moonTrackFill"></div></div>
         <p class="astro-source" id="astroSource">Изчислено от реалните позиции на планетите за днес.</p>
       </article>
 
-      <article class="glass card reveal d3 hidden" id="personalCard">
+      <article class="glass card reveal d3 hidden" id="upcomingCard">
+        <h2 class="card-label"><span class="dot violet"></span>Предстоящи събития</h2>
+        <div id="upcomingList"></div>
+      </article>
+
+      <article class="glass card reveal d4 hidden" id="personalCard">
         <h2 class="card-label"><span class="dot cyan"></span>Лично от Ретрограден</h2>
         <div id="personalLines"></div>
         <p class="astro-source">Спрямо твоята натална карта (Асцендент <span id="personalAsc"></span>).</p>
@@ -694,7 +747,23 @@ const DAILY_POOL = [
   { tag:"jupiter_retrograde", text:"Юпитер е ретрограден. Растежът е насочен навътре — преразглеждаш стари планове, вместо да стартираш нови. Не е слабост, а ревизия." },
   { tag:"jupiter_direct",     text:"Юпитер е директен и щедър по природа. НАП — не. Планирай бюджета съответно." },
   { tag:"saturn_retrograde",  text:"Сатурн е ретрограден. Уроците, които бягаш да научиш, се връщат — с лихва и без извинение." },
-  { tag:"saturn_direct",      text:"Сатурн е директен. Дисциплината се отплаща бавно, но точно днес не изглежда толкова непоносима." }
+  { tag:"saturn_direct",      text:"Сатурн е директен. Дисциплината се отплаща бавно, но точно днес не изглежда толкова непоносима." },
+  { tag:"generic", timeTag:"morning", text:"Будилникът звъня три пъти, ти го отложи два. Денят още не е объркал нищо — засега." },
+  { tag:"generic", timeTag:"morning", text:"Кафето е единственото нещо тази сутрин, което върши точно това, което очакваш от него." },
+  { tag:"generic", timeTag:"morning", text:"Цариградско шосе в 8 сутринта е най-честният астролог — показва ти точно колко закъсняваш." },
+  { tag:"generic", timeTag:"morning", text:"Още не си отворил инбокса. Технически денят е перфектен. Не го разваляй." },
+  { tag:"generic", timeTag:"afternoon", text:"Трети Zoom за деня, никой не иска да е на него, включително организаторът." },
+  { tag:"generic", timeTag:"afternoon", text:"Обедна почивка от 12 минути пред бюрото — звездите я броят за почивка, ти не толкова." },
+  { tag:"generic", timeTag:"afternoon", text:"Три следобед. Кафето вече не помага, просто поддържа привидности." },
+  { tag:"generic", timeTag:"afternoon", text:"Шефът пусна „5 мин“ в 16:45. Тия пет минути имат собствена часова зона." },
+  { tag:"generic", timeTag:"evening", text:"Прибра се, вечеря от каквото свари, равносметка на деня — не особено ласкава." },
+  { tag:"generic", timeTag:"evening", text:"Групата за наем пак пише в 20:00. Космосът препоръчва да го оставиш за утре, знаейки, че няма." },
+  { tag:"generic", timeTag:"evening", text:"Вечерта е за равносметка. Днешната: три недовършени задачи и едно основателно самосъжаление." },
+  { tag:"generic", timeTag:"evening", text:"Легнал си, телефонът вече свети. Скролваш „последно“ пет пъти. Знаеш го." },
+  { tag:"generic", timeTag:"night", text:"03:14 е. Мислиш за разговор от 2019-та. Космосът спи, ти явно не му вярваш." },
+  { tag:"generic", timeTag:"night", text:"Екранът на телефона в тъмното е единствената светлина, в която признаваш неща на себе си." },
+  { tag:"generic", timeTag:"night", text:"Безсъние в най-неподходящия час. Утре имаш среща в 9, а мозъкът избра точно сега да прави равносметка." },
+  { tag:"generic", timeTag:"night", text:"Таванът в 4 сутринта пази повече твои тайни от терапевта ти." }
 ];
 
 /* Емоционален привкус по стихия — ползва се за динамичното
@@ -1076,9 +1145,13 @@ function computeSky(date){
     const marsRetro      = isRetro(Astronomy.Body.Mars,    date);
     const jupiterRetro  = isRetro(Astronomy.Body.Jupiter, date);
     const saturnRetro    = isRetro(Astronomy.Body.Saturn,  date);
-    const moonSign = signOf(elon(Astronomy.Body.Moon, date));
+    const moonLon = elon(Astronomy.Body.Moon, date);
+    const moonSign = signOf(moonLon);
     const sunSign  = signOf(elon(Astronomy.Body.Sun,  date));
     const phaseAngle = Astronomy.MoonPhase(date);
+    /* Градуси на Луната В рамките на текущия ѝ знак (0-29.99) — за
+       прогрес бар "колко ѝ остава до следващия знак". */
+    const moonDeg = ((moonLon % 30) + 30) % 30;
 
     /* Знак + индекс на 5-те лични/социални планети — добавъчно, за
        нуждите на персонализацията спрямо наталната карта (транзити
@@ -1092,7 +1165,7 @@ function computeSky(date){
 
     return {
       mercuryRetro, venusRetro, marsRetro, jupiterRetro, saturnRetro,
-      moonSign, sunSign, phaseAngle, phase: phaseInfo(phaseAngle),
+      moonSign, sunSign, phaseAngle, phase: phaseInfo(phaseAngle), moonDeg,
       mercurySignIdx, venusSignIdx, marsSignIdx, jupiterSignIdx, saturnSignIdx, moonSignIdx
     };
   } catch (e){
@@ -1101,11 +1174,26 @@ function computeSky(date){
   }
 }
 
-/* Подбира само съобщения, чиито условия реално важат днес */
-function pickDailyPool(sky){
-  if (!sky) return DAILY_POOL.filter(i => i.tag === "generic").map(i => i.text);
+/* Часови прозорец на деня — за DAILY_POOL записи с по желание поле
+   timeTag. Записи без timeTag не зависят от часа, показват се винаги. */
+function timeTagFor(date){
+  const h = date.getHours();
+  if (h >= 5 && h <= 11) return "morning";
+  if (h >= 12 && h <= 17) return "afternoon";
+  if (h >= 18 && h <= 22) return "evening";
+  return "night"; // 23-04
+}
+
+/* Подбира само съобщения, чиито условия реално важат сега — и по
+   астрономически таг, и по час от денонощието (timeTag, ако е зададен). */
+function pickDailyPool(sky, date){
+  const currentTimeTag = timeTagFor(date || new Date());
+  const timeTagOk = item => !item.timeTag || item.timeTag === currentTimeTag;
+
+  if (!sky) return DAILY_POOL.filter(i => i.tag === "generic" && timeTagOk(i)).map(i => i.text);
   const pool = [];
   DAILY_POOL.forEach(item => {
+    if (!timeTagOk(item)) return;
     switch (item.tag){
       case "generic": pool.push(item.text); break;
       case "mercury_retrograde": if (sky.mercuryRetro)  pool.push(item.text); break;
@@ -1141,13 +1229,94 @@ function chaosScore(sky){
   return Math.max(4, Math.min(99, Math.round(score)));
 }
 
+/* ============================================================
+   ПРЕДСТОЯЩИ СЪБИТИЯ · сканира напред ден по ден и засича реални
+   преходи (фаза на Луната, смяна на лунен знак, ретрограден флип
+   на Меркурий/Венера/Марс). Изпълнява се на малки парчета през
+   setTimeout(0), за да не блокира UI — computeSky() за 60 дни е
+   бързо (~30-60ms общо на десктоп в тестове), но на по-бавен телефон
+   90 синхронни извиквания могат да засекат кадър, затова chunk-ваме
+   независимо. Резултатът се кешира за деня — не пресмятаме наново
+   при всеки hourly refresh, само при реална смяна на календарния ден. */
+const UPCOMING_HORIZON_DAYS = 60;
+const UPCOMING_CHUNK_SIZE = 15;
+
+function computeUpcomingEvents(referenceDate, onDone){
+  if (typeof Astronomy === "undefined"){ onDone([]); return; }
+  const events = [];
+  let prevSky = computeSky(new Date(referenceDate.getTime() - 86400000)); /* вчера, за да хванем "случило се днес" */
+  if (!prevSky){ onDone([]); return; }
+  let day = 0;
+
+  const RETRO_PLANETS = [
+    { key:"mercury", label:"Меркурий", icon:"☿", retroWord:"ретрограден", directWord:"директен" },
+    { key:"venus",   label:"Венера",   icon:"♀", retroWord:"ретроградна", directWord:"директна" },
+    { key:"mars",    label:"Марс",     icon:"♂", retroWord:"ретрограден", directWord:"директен" }
+  ];
+
+  function processChunk(){
+    const chunkEnd = Math.min(day + UPCOMING_CHUNK_SIZE, UPCOMING_HORIZON_DAYS);
+    for (; day < chunkEnd; day++){
+      const d = new Date(referenceDate.getTime() + day * 86400000);
+      const sky = computeSky(d);
+      if (!sky){ continue; }
+
+      if (prevSky.phase.key !== "full_moon" && sky.phase.key === "full_moon"){
+        events.push({ type:"full_moon", icon:"🌕", label:"Пълнолуние", date:d, daysUntil: day });
+      }
+      if (prevSky.phase.key !== "new_moon" && sky.phase.key === "new_moon"){
+        events.push({ type:"new_moon", icon:"🌑", label:"Новолуние", date:d, daysUntil: day });
+      }
+      if (prevSky.moonSignIdx !== sky.moonSignIdx){
+        events.push({
+          type:"moon_sign", icon:"☽",
+          label:"Луна влиза в " + sky.moonSign.symbol + " " + sky.moonSign.name,
+          date:d, daysUntil: day
+        });
+      }
+      RETRO_PLANETS.forEach(p => {
+        const wasRetro = prevSky[p.key + "Retro"], isRetro = sky[p.key + "Retro"];
+        if (wasRetro !== isRetro){
+          events.push({
+            type: p.key + (isRetro ? "_retro" : "_direct"), icon: p.icon,
+            label: p.label + " става " + (isRetro ? p.retroWord : p.directWord),
+            date:d, daysUntil: day
+          });
+        }
+      });
+
+      prevSky = sky;
+    }
+
+    if (day < UPCOMING_HORIZON_DAYS){
+      setTimeout(processChunk, 0);
+    } else {
+      events.sort((a, b) => a.daysUntil - b.daysUntil);
+      /* Луната сменя знак на всеки ~2.3 дни — без ограничение би
+         запълнила и четирите слота само с това, изтласквайки
+         по-редките (пълнолуние/новолуние, ретрограден флип). Пазим
+         най-много 1 лунна смяна на знак (най-близката), останалите
+         слотове са за по-рядкото. */
+      const special = events.filter(e => e.type !== "moon_sign");
+      const moonSignEvents = events.filter(e => e.type === "moon_sign");
+      let picked = special.slice(0, 4);
+      if (picked.length < 4 && moonSignEvents.length) picked.push(moonSignEvents[0]);
+      picked.sort((a, b) => a.daysUntil - b.daysUntil);
+      onDone(picked.slice(0, 4));
+    }
+  }
+  processChunk();
+}
+
 function renderChips(sky){
   const el = $("chipsRow");
   el.innerHTML = "";
   const src = $("astroSource");
+  const track = $("moonTrack");
   if (!sky){
     el.innerHTML = '<span class="chip">Няма връзка с астрономическите изчисления в момента</span>';
     if (src) src.textContent = "Опитай да презаредиш — данните идват от изчисление в реално време, не от заготовка.";
+    if (track) track.classList.add("hidden");
     return;
   }
   [
@@ -1157,7 +1326,7 @@ function renderChips(sky){
     { label:`Юпитер · ${sky.jupiterRetro ? "ретрограден" : "директен"}`,   hot: sky.jupiterRetro },
     { label:`Сатурн · ${sky.saturnRetro ? "ретрограден" : "директен"}`,    hot: sky.saturnRetro },
     { label:`Луна · ${sky.phase.label}`, hot: sky.phase.key === "full_moon" || sky.phase.key === "new_moon" },
-    { label:`Луна в ${sky.moonSign.symbol} ${sky.moonSign.name}`, hot:false },
+    { label:`Луна в ${sky.moonSign.symbol} ${sky.moonSign.name} ${Math.floor(sky.moonDeg)}°`, hot:false },
     { label:`Сезон на ${sky.sunSign.symbol} ${sky.sunSign.name}`, hot:false }
   ].forEach(it => {
     const span = document.createElement("span");
@@ -1165,6 +1334,10 @@ function renderChips(sky){
     span.textContent = it.label;
     el.appendChild(span);
   });
+  if (track){
+    track.classList.remove("hidden");
+    requestAnimationFrame(() => { $("moonTrackFill").style.width = (sky.moonDeg / 30 * 100) + "%"; });
+  }
 }
 
 /* ============================================================
@@ -1600,6 +1773,98 @@ function nearestCity(lat, lon){
     return reasons.length ? reasons.join(", ") : null;
   }
 
+  /* Предстоящи събития — computeUpcomingEvents() е асинхронна (chunk-
+     ва сканирането), кешираме резултата за календарния ден, за да не
+     преизчисляваме 60-дневен хоризонт на всеки часови тик. */
+  let upcomingCache = { dateKey: null, events: null };
+  function renderUpcomingEvents(events){
+    const card = $("upcomingCard");
+    const list = $("upcomingList");
+    if (!card || !list) return;
+    if (!events || !events.length){ card.classList.add("hidden"); return; }
+    list.innerHTML = events.map(ev => {
+      let when;
+      if (ev.daysUntil === 0) when = '<span class="event-when today">ДНЕС</span>';
+      else if (ev.daysUntil === 1) when = '<span class="event-when tomorrow">УТРЕ</span>';
+      else when = '<span class="event-when">след ' + ev.daysUntil + ' дни</span>';
+      return '<div class="event-row"><span class="event-icon">' + ev.icon + '</span><span class="event-label">' + esc(ev.label) + '</span>' + when + '</div>';
+    }).join("");
+    card.classList.remove("hidden");
+  }
+  function refreshUpcomingEvents(d){
+    const dateKey = d.toDateString();
+    if (upcomingCache.dateKey === dateKey){
+      renderUpcomingEvents(upcomingCache.events);
+      return;
+    }
+    computeUpcomingEvents(d, (events) => {
+      upcomingCache = { dateKey, events };
+      renderUpcomingEvents(events);
+    });
+  }
+
+  /* "Откакто последно надникна" — сравнява текущото небе с моментна
+     снимка от ПРЕДИШНОТО реално посещение (не с всеки часови тик —
+     затова се вика еднократно тук, не от вътре в renderForDate).
+     Първо посещение (няма запазена снимка) → нищо не се показва. */
+  const LAST_VISIT_KEY = "retrograden_last_visit_v1";
+  const RETRO_PLANET_META = [
+    { key:"mercury", label:"Меркурий", symbol:"☿", retroWord:"ретрограден",  directWord:"директен" },
+    { key:"venus",   label:"Венера",   symbol:"♀", retroWord:"ретроградна",  directWord:"директна" },
+    { key:"mars",    label:"Марс",     symbol:"♂", retroWord:"ретрограден",  directWord:"директен" },
+    { key:"jupiter", label:"Юпитер",   symbol:"♃", retroWord:"ретрограден",  directWord:"директен" },
+    { key:"saturn",  label:"Сатурн",   symbol:"♄", retroWord:"ретрограден",  directWord:"директен" }
+  ];
+  function showWhatChanged(sky, score){
+    if (!sky) return;
+    let prev = null;
+    try { prev = JSON.parse(localStorage.getItem(LAST_VISIT_KEY) || "null"); } catch(e){}
+
+    const snapshot = {
+      date: new Date().toISOString(), chaosScore: score, moonSignIdx: sky.moonSignIdx,
+      mercuryRetro: sky.mercuryRetro, venusRetro: sky.venusRetro, marsRetro: sky.marsRetro,
+      jupiterRetro: sky.jupiterRetro, saturnRetro: sky.saturnRetro,
+      mercurySignIdx: sky.mercurySignIdx, venusSignIdx: sky.venusSignIdx, marsSignIdx: sky.marsSignIdx,
+      jupiterSignIdx: sky.jupiterSignIdx, saturnSignIdx: sky.saturnSignIdx
+    };
+    try { localStorage.setItem(LAST_VISIT_KEY, JSON.stringify(snapshot)); } catch(e){}
+
+    if (!prev) return; /* първо посещение — няма с какво да сравним */
+
+    const lines = [];
+    const diff = snapshot.chaosScore - prev.chaosScore;
+    if (Math.abs(diff) >= 1){
+      lines.push("Хаосът: " + prev.chaosScore + "% → " + snapshot.chaosScore + "% " + (diff > 0 ? "↑" : "↓"));
+    }
+    if (typeof prev.moonSignIdx === "number" && prev.moonSignIdx !== snapshot.moonSignIdx){
+      lines.push("☽ Луната премина от " + SIGNS[prev.moonSignIdx].symbol + " " + SIGNS[prev.moonSignIdx].name +
+        " в " + SIGNS[snapshot.moonSignIdx].symbol + " " + SIGNS[snapshot.moonSignIdx].name);
+    }
+    RETRO_PLANET_META.forEach(p => {
+      const prevRetro = prev[p.key + "Retro"], nowRetro = snapshot[p.key + "Retro"];
+      if (typeof prevRetro === "boolean" && prevRetro !== nowRetro){
+        lines.push(nowRetro
+          ? "⚡ " + p.label + " стана " + p.retroWord
+          : "✓ " + p.label + " вече е " + p.directWord);
+      }
+      const prevSignIdx = prev[p.key + "SignIdx"], nowSignIdx = snapshot[p.key + "SignIdx"];
+      if (typeof prevSignIdx === "number" && prevSignIdx !== nowSignIdx){
+        lines.push(p.symbol + " " + p.label + " влезе в " + SIGNS[nowSignIdx].name);
+      }
+    });
+
+    if (!lines.length) lines.push("Космосът е същият. Дори Луната не се е помръднала.");
+
+    const card = $("whatChangedCard");
+    if (!card) return;
+    $("whatChangedLines").innerHTML = lines.map(l => "<p class=\"rc-text\">" + esc(l) + "</p>").join("");
+    card.classList.remove("hidden");
+    setTimeout(() => {
+      card.classList.add("fading");
+      setTimeout(() => { card.classList.add("hidden"); card.classList.remove("fading"); }, 650);
+    }, 8000);
+  }
+
   /* Ниво на хаос — от реални транзити и лунна фаза. Етикетът зависи и
      от деня от седмицата (CHAOS_BANDS[].days, 0=понеделник) и от
      дата-хеша dailyIndex (виж по-горе) — детерминистичен в рамките на
@@ -1619,6 +1884,13 @@ function nearestCity(lat, lon){
     requestAnimationFrame(() => { $("chaosFill").style.width = v + "%"; });
     countUp($("chaosNum"), v, 1400, "%");
     setTimeout(() => { $("chaosTag").textContent = chaosLabel(v); }, 450);
+
+    const now = new Date();
+    $("updatedLine").textContent = "Обновено в " + now.toLocaleTimeString("bg-BG", { hour:"2-digit", minute:"2-digit" });
+    const badge = $("liveBadge");
+    badge.classList.remove("flash");
+    void badge.offsetWidth; /* рестарт на CSS анимацията */
+    badge.classList.add("flash");
   }
 
   let pool, msgIdx, score, lastComputedDateStr, lastSky, lastMsgText, currentRenderDate;
@@ -1629,6 +1901,7 @@ function nearestCity(lat, lon){
      стои отворен с дни. */
   function renderForDate(d){
     const sameDayAsBefore = lastComputedDateStr === d.toDateString();
+    const prevRenderDate = currentRenderDate;
     currentRenderDate = d;
 
     let dstr = d.toLocaleDateString("bg-BG", { weekday:"long", day:"numeric", month:"long" });
@@ -1640,7 +1913,7 @@ function nearestCity(lat, lon){
     /* Известие от Космоса — само реално важащи днес; индексът е
        хеш-базиран (виж dailyIndex по-горе), не линеен брояч, за да
        не се повтаря в предвидим цикъл, докато условието трае. */
-    pool = pickDailyPool(sky);
+    pool = pickDailyPool(sky, d);
     msgIdx = dailyIndex(d, pool.length);
     const newMsgText = pool[msgIdx];
 
@@ -1650,7 +1923,11 @@ function nearestCity(lat, lon){
        смениш текста мълчаливо. При смяна на деня или при първо
        зареждане подсказката се крие. */
     if (sameDayAsBefore && lastMsgText !== undefined && newMsgText !== lastMsgText){
-      msgHintEl.textContent = "Обновено — " + (describeSkyChange(lastSky, sky) || "промяна в реалното небе") + ".";
+      const reasons = [];
+      const skyReason = describeSkyChange(lastSky, sky);
+      if (skyReason) reasons.push(skyReason);
+      if (prevRenderDate && timeTagFor(prevRenderDate) !== timeTagFor(d)) reasons.push("часът на деня се смени");
+      msgHintEl.textContent = "Обновено — " + (reasons.length ? reasons.join(", ") : "промяна в реалното небе") + ".";
       msgHintEl.classList.remove("hidden");
     } else {
       msgHintEl.classList.add("hidden");
@@ -1665,12 +1942,15 @@ function nearestCity(lat, lon){
 
     renderChips(sky);
 
+    refreshUpcomingEvents(d);
+
     refreshPersonalCard();
 
     lastComputedDateStr = d.toDateString();
   }
 
   renderForDate(new Date());
+  showWhatChanged(lastSky, score);
 
   $("nextMsgBtn").addEventListener("click", () => {
     msgEl.classList.add("out");
