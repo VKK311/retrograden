@@ -381,6 +381,18 @@ select.field option{background:#0b0d22;color:var(--text)}
 .combo-vs{font-family:var(--font-display);font-weight:800;font-size:19px;text-align:center;margin:10px 0 4px}
 .combo-aspect{font-size:12px;color:var(--muted);letter-spacing:.04em;margin-top:2px}
 
+/* ---------- v1.7: контекстен въпрос + четене ---------- */
+.context-options{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+.context-btn{
+  display:flex;align-items:center;gap:13px;padding:14px 16px;border-radius:16px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);
+  font:500 14px var(--font-body);text-align:left;transition:all .22s ease;width:100%;
+}
+.context-btn:hover{border-color:rgba(92,225,255,.5);transform:translateY(-1px)}
+.context-btn:disabled{opacity:.5;cursor:default;transform:none}
+.context-btn .ci{font-size:21px;flex:none;line-height:1}
+.layer-card .rc-label{display:flex;align-items:center;gap:8px}
+
 /* ---------- Тоуст ---------- */
 .toast{
   position:fixed;left:50%;bottom:100px;z-index:9;max-width:calc(100% - 40px);
@@ -620,6 +632,16 @@ select.field option{background:#0b0d22;color:var(--text)}
     <section id="screen-combresult" class="screen" role="tabpanel" aria-label="Резултат от Космическа комбинация">
       <button class="ghost-btn" id="combresultBack" type="button" style="margin:8px 0 4px">← Назад към Сравни</button>
       <div id="combresultBody"></div>
+    </section>
+
+    <!-- ================= ЕКРАН 7: КОНТЕКСТЕН ВЪПРОС ================= -->
+    <section id="screen-combcontext" class="screen" role="tabpanel" aria-label="Контекст на връзката">
+      <h1 class="screen-title" style="text-align:center">Така. Двамата сте тук.</h1>
+      <p class="screen-sub" style="text-align:center">Картите са изчислени. Преди да ти кажа какво виждам — какъв е въпросът, който те вълнува наистина?</p>
+      <div class="context-options" id="contextOptions"></div>
+      <article class="glass card hidden" id="contextIntro" style="text-align:center;margin-top:16px">
+        <p class="rc-text" id="contextIntroText"></p>
+      </article>
     </section>
   </main>
 
@@ -2566,6 +2588,7 @@ function computeCombination(chartA, chartB, nameA, nameB){
   return {
     nameA, nameB,
     pairings: topPairings,
+    allPairings: pairings, /* пълният, непресечен списък — v1.7 контекстното четене търси конкретни двойки (Венера-Марс), които биха могли да не попаднат в топ 6 */
     topStrength, topChallenge,
     summary: getSummary(totalScore, nameA, nameB),
     score: totalScore
@@ -2722,6 +2745,18 @@ const COMBO_SUMMARIES = {
   ]
 };
 
+/* v1.7 контекстни текстови банки — попълват се от retrograden-voice;
+   generateContextualReading() по-долу деградира честно (виж
+   genericLayerFallback) ако дадена комбинация все още липсва тук. */
+const CONTEXT_INTROS = {
+  crush: [], couple: [], friends: [], ex: [], work: [], bored: []
+};
+const FIRST_MEETING_TEMPLATES = {};
+const EMOTIONS_TEMPLATES = {};
+const PASSION_TEMPLATES = {};
+const LONGTERM_TEMPLATES = {};
+const CONTEXT_SUMMARIES = {};
+
 function getPairingComment(pairKey, signA, signB, aspect, nameA, nameB){
   const specific = COMBO_COMMENTS.find(c => c.pair === pairKey && c.aspect === aspect);
   const pool = specific ? specific.templates : (COMBO_GENERIC[aspect] || ["{signA} и {signB} — Космосът вдига рамене, но с интерес."]);
@@ -2739,6 +2774,164 @@ function getSummary(score, nameA, nameB){
   const pool = COMBO_SUMMARIES[tier];
   return pool[Math.floor(Math.random() * pool.length)]
     .replace(/{nameA}/g, nameA).replace(/{nameB}/g, nameB);
+}
+
+/* ============================================================
+   v1.7 · КОНТЕКСТНО ЧЕТЕНЕ
+   Преди резултата, Ретрограден пита какъв е контекстът на връзката
+   (crush/couple/friends/ex/work/bored) и оформя четенето според
+   отговора + реалните аспекти + пола (ако е известен). НЕ пипа
+   computeCombination()/comboLons()/getAspect() — само чете резултата
+   и наталните карти отгоре.
+   ============================================================ */
+const CONTEXT_OPTIONS = [
+  { id:"crush",   label:"Харесвам го/я, но нз какво да правя",     icon:"💫" },
+  { id:"couple",  label:"Вече сме се хванали на хорото",            icon:"🔗" },
+  { id:"friends", label:"Просто приятелчета сме… май",              icon:"🤝" },
+  { id:"ex",      label:"Бивши сме. Питам дали пак",                icon:"🔄" },
+  { id:"work",    label:"Колеги/съкуренти — искам да разбера",      icon:"💼" },
+  { id:"bored",   label:"Просто ми е скучно",                       icon:"🍿" }
+];
+
+const LAYER_TITLES = {
+  meeting: {
+    crush:"Първо впечатление", couple:"Как се запознахте (Космосът помни)",
+    friends:"Как започна", ex:"Какво ви свърза първоначално",
+    work:"Първи работен ден заедно", bored:"Ако се бяхте запознали"
+  },
+  emotions: {
+    crush:"Какво чувстваш (Космосът знае)", couple:"Емоционалният ви живот (постмортем)",
+    friends:"Емоционална динамика (или липса на такава)", ex:"Защо се почувства толкова силно",
+    work:"Емоциите в офиса (опасна зона)", bored:"Ако имахте емоции"
+  },
+  passion: {
+    crush:"Искра ли има?", couple:"Пасионът ви (или липсата му)",
+    friends:"Тук е опасно", ex:"Защо се връщаш",
+    work:"Не правете това. Но ето какво казва Космосът.", bored:"Химия (сурова версия)"
+  },
+  longterm: {
+    crush:"Има ли бъдеще (или е за една нощ)", couple:"Бъдещето ви (Космосът не гарантира)",
+    friends:"Ще ви издържат ли", ex:"Защо не се получи",
+    work:"Дългосрочна работна динамика", bored:"Ако бяхте останали заедно"
+  }
+};
+
+/* Fallback, ако елементната комбинация/контекст още няма авторски
+   текст (само за комбинации извън първоначално покритите — виж
+   FIRST_MEETING_TEMPLATES/EMOTIONS_TEMPLATES) — честна деградация,
+   никога празно поле. */
+function genericLayerFallback(layerKey, context, nameA, nameB){
+  const generic = {
+    meeting:  "Реалните позиции на планетите потвърждават среща — детайлите Космосът пази за себе си засега.",
+    emotions: "Емоционалната динамика е реална, но все още неразчетена в детайли за тази комбинация.",
+    passion:  "Химията е измерима астрономически — конкретните думи за нея са на път.",
+    longterm: "Дългосрочните аспекти са изчислени — прогнозата за тях идва скоро."
+  };
+  return (generic[layerKey] || "Космосът смята, но засега мълчи по темата.");
+}
+
+function pronounOrName(gender, name){
+  if (gender === "male") return "той";
+  if (gender === "female") return "тя";
+  return name;
+}
+function genderComboKey(genderA, genderB){
+  if ((genderA === "male" && genderB === "female") || (genderA === "female" && genderB === "male")) return "male+female";
+  if (genderA === "male" && genderB === "male") return "male+male";
+  if (genderA === "female" && genderB === "female") return "female+female";
+  return "unknown";
+}
+function elementOfSignName(name){
+  const s = SIGNS.find(x => x.name === name);
+  return s ? s.element : null;
+}
+function elComboKey(el1, el2){ return el1 && el2 ? [el1, el2].sort().join("+") : null; }
+function pickFrom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+function chartPlanetSign(chart, name){
+  const p = chart && chart.planets ? chart.planets.find(pl => pl.name === name) : null;
+  return p ? p.sign.name : null;
+}
+function chartPlanetLon(chart, name){
+  const p = chart && chart.planets ? chart.planets.find(pl => pl.name === name) : null;
+  return p ? ((p.longitude % 360) + 360) % 360 : null;
+}
+
+/* Слой 4 се базира на Юпитер/Сатурн аспекти, каквито COMBO_PAIRS не
+   съдържа — малка самостоятелна проверка, преизползва getAspect(),
+   не пипа comboLons()/computeCombination(). */
+function longTermOutcome(chartA, chartB){
+  const jA = chartPlanetLon(chartA, "Jupiter"), jB = chartPlanetLon(chartB, "Jupiter");
+  const sA = chartPlanetLon(chartA, "Saturn"), sB = chartPlanetLon(chartB, "Saturn");
+  if (jA === null || jB === null || sA === null || sB === null) return "neutral";
+  const total = [getAspect(jA - jB), getAspect(sA - sB), getAspect(jA - sB), getAspect(sA - jB)]
+    .reduce((sum, a) => sum + a.strength, 0);
+  if (total >= 4) return "positive";
+  if (total <= -2) return "negative";
+  return "neutral";
+}
+
+/* Открива посоката на реалната Венера-Марс двойка сред ВСИЧКИ
+   изчислени аспекти (не само топ 6) — symbols казва кой е Венера,
+   кой Марс: "♀♂" = A има Венера, B има Марс; "♂♀" е обратното. */
+function findPassionPairing(allPairings){
+  const candidates = allPairings.filter(p => p.pairKey === "Венера-Марс");
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => Math.abs(b.strength) - Math.abs(a.strength));
+  return candidates[0];
+}
+
+function generateContextualReading(comboResult, context, profileA, profileB){
+  const nameA = comboResult.nameA, nameB = comboResult.nameB;
+  const genderA = profileA.gender || null, genderB = profileB.gender || null;
+  const chartA = profileA.chart, chartB = profileB.chart;
+  const gKey = genderComboKey(genderA, genderB);
+
+  /* Слой 1: Първа среща (Слънце x Слънце) */
+  const sunCombo = elComboKey(elementOfSignName(chartPlanetSign(chartA, "Sun")), elementOfSignName(chartPlanetSign(chartB, "Sun")));
+  const meetingPool = sunCombo && FIRST_MEETING_TEMPLATES[sunCombo] && FIRST_MEETING_TEMPLATES[sunCombo][context];
+  const meetingText = meetingPool && meetingPool.length ? pickFrom(meetingPool) : genericLayerFallback("meeting", context, nameA, nameB);
+
+  /* Слой 2: Емоции (Луна x Луна) */
+  const moonCombo = elComboKey(elementOfSignName(chartPlanetSign(chartA, "Moon")), elementOfSignName(chartPlanetSign(chartB, "Moon")));
+  const emotionsPool = moonCombo && EMOTIONS_TEMPLATES[moonCombo] && EMOTIONS_TEMPLATES[moonCombo][context];
+  const emotionsText = emotionsPool && emotionsPool.length ? pickFrom(emotionsPool) : genericLayerFallback("emotions", context, nameA, nameB);
+
+  /* Слой 3: Страст (Венера x Марс) — най-важният слой, ползва пола */
+  const passionPairing = findPassionPairing(comboResult.allPairings || comboResult.pairings);
+  let passionText;
+  if (passionPairing){
+    const aIsVenus = passionPairing.symbols === "♀♂";
+    const venusSign = aIsVenus ? passionPairing.signA : passionPairing.signB;
+    const marsSign  = aIsVenus ? passionPairing.signB : passionPairing.signA;
+    const passionCombo = elComboKey(elementOfSignName(venusSign), elementOfSignName(marsSign));
+    const passionBucket = passionCombo && PASSION_TEMPLATES[passionCombo] && PASSION_TEMPLATES[passionCombo][context];
+    const passionPool = passionBucket && (passionBucket[gKey] || passionBucket.unknown);
+    passionText = passionPool && passionPool.length ? pickFrom(passionPool) : genericLayerFallback("passion", context, nameA, nameB);
+  } else {
+    passionText = genericLayerFallback("passion", context, nameA, nameB);
+  }
+
+  /* Слой 4: Дългосрочно (Юпитер/Сатурн) */
+  const outcome = longTermOutcome(chartA, chartB);
+  const longtermPool = LONGTERM_TEMPLATES[context] && LONGTERM_TEMPLATES[context][outcome];
+  const longtermText = longtermPool && longtermPool.length ? pickFrom(longtermPool) : genericLayerFallback("longterm", context, nameA, nameB);
+
+  /* Контекстно обобщение — заменя getSummary() само за тази четена версия */
+  const tier = comboResult.score >= 8 ? "high" : comboResult.score >= 2 ? "medium" : "low";
+  const summaryPool = CONTEXT_SUMMARIES[context] && CONTEXT_SUMMARIES[context][tier];
+  const summaryTemplate = summaryPool && summaryPool.length ? pickFrom(summaryPool) : "{nameA} и {nameB} — Космосът има мнение, но е неутрално засега.";
+  const contextSummary = summaryTemplate.replace(/{nameA}/g, nameA).replace(/{nameB}/g, nameB);
+
+  return {
+    context,
+    layers: [
+      { key:"meeting",  title:LAYER_TITLES.meeting[context],  icon:"☉", text:meetingText },
+      { key:"emotions", title:LAYER_TITLES.emotions[context], icon:"☽", text:emotionsText },
+      { key:"passion",  title:LAYER_TITLES.passion[context],  icon:"♀", text:passionText },
+      { key:"longterm", title:LAYER_TITLES.longterm[context], icon:"♃", text:longtermText }
+    ],
+    summary: contextSummary
+  };
 }
 
 /* ---------- Покани ---------- */
@@ -2800,17 +2993,24 @@ async function acceptInvite(rawCode){
   const result = computeCombination(invite.inviter_chart, profile.chart, invite.inviter_name, profile.name);
   if (!result){ toast("Едната карта е повредена. Космосът отказва да гадае."); return; }
 
+  /* Записваме комбинацията тук, но БЕЗ context — той се допълва след
+     въпроса (виж finalizeContextualResult), за да пазим reading-а в
+     Supabase с реалния избран контекст, не преди да е известен. */
+  let combinationRowId = null;
   try {
-    await supabaseClient.from("combinations").insert({
+    const { data } = await supabaseClient.from("combinations").insert({
       user_a_id: invite.inviter_id,
       user_b_id: profile.id,
       user_a_name: invite.inviter_name,
       user_b_name: profile.name,
       result_json: result
-    });
+    }).select("id").single();
+    if (data) combinationRowId = data.id;
   } catch(e){}
 
-  showCombinationResult(result);
+  const profileA = { id: invite.inviter_id, name: invite.inviter_name, gender: invite.inviter_gender || null, chart: invite.inviter_chart };
+  const profileB = { id: profile.id, name: profile.name, gender: profile.gender || null, chart: profile.chart };
+  showContextQuestion(result, profileA, profileB, combinationRowId);
 }
 
 /* ---------- Екран с резултата ---------- */
@@ -2822,39 +3022,105 @@ function comboPairCard(p, nameA, nameB){
     '<p class="rc-text" style="margin-top:7px">' + esc(p.comment) + '</p></div>';
 }
 
-function showCombinationResult(result){
+/* Пълните астрономически детайли (реални аспекти/знаци) — връща само
+   HTML фрагмент, без да пипа екрана; вика се от showContextualResult
+   като второстепенна, разгъваема секция под контекстното четене. */
+function renderAstroDetailsHTML(result){
   const { nameA, nameB } = result;
   let html = "";
-  html += '<h1 class="screen-title" style="text-align:center">Космическа <span class="grad">комбинация</span></h1>';
-  html += '<p class="combo-vs">' + esc(nameA) + ' <span class="grad">×</span> ' + esc(nameB) + '</p>';
-
   if (result.topStrength){
     html += '<article class="glass card reveal"><h2 class="card-label"><span class="dot"></span>Върховна черта</h2>' +
       comboPairCard(result.topStrength, nameA, nameB).replace('border-bottom:1px solid var(--line)', 'border-bottom:none') + '</article>';
   }
-
   const middle = result.pairings.filter(p => p !== result.topStrength && p !== result.topChallenge);
   if (middle.length){
     html += '<article class="glass card reveal d1"><h2 class="card-label"><span class="dot cyan"></span>Съвпадения</h2>' +
       middle.map(p => comboPairCard(p, nameA, nameB)).join("") + '</article>';
   }
-
   if (result.topChallenge && result.topChallenge !== result.topStrength){
     html += '<article class="glass card reveal d2"><h2 class="card-label flag">🚩 Внимание</h2>' +
       comboPairCard(result.topChallenge, nameA, nameB).replace('border-bottom:1px solid var(--line)', 'border-bottom:none') + '</article>';
   }
+  return html;
+}
+
+/* ---------- v1.7: контекстен въпрос → интро → четене ---------- */
+let pendingCombo = null;
+
+function renderContextOptions(){
+  const box = $("contextOptions");
+  if (!box || box.dataset.rendered) return;
+  box.dataset.rendered = "1";
+  box.innerHTML = CONTEXT_OPTIONS.map(o =>
+    '<button class="context-btn" type="button" data-context="' + o.id + '"><span class="ci">' + o.icon + '</span><span>' + esc(o.label) + '</span></button>'
+  ).join("");
+  box.addEventListener("click", (e) => {
+    const btn = e.target.closest(".context-btn");
+    if (!btn || !pendingCombo) return;
+    onContextChosen(btn.dataset.context);
+  });
+}
+
+function showContextQuestion(comboResult, profileA, profileB, combinationRowId){
+  renderContextOptions();
+  pendingCombo = { comboResult, profileA, profileB, combinationRowId };
+  $("contextIntro").classList.add("hidden");
+  document.querySelectorAll("#contextOptions .context-btn").forEach(b => b.disabled = false);
+  showScreen("screen-combcontext");
+}
+
+function onContextChosen(context){
+  if (!pendingCombo) return;
+  const introPool = CONTEXT_INTROS[context];
+  const introText = introPool && introPool.length ? pickFrom(introPool) : "Космосът обмисля отговора си…";
+  $("contextIntroText").textContent = introText;
+  $("contextIntro").classList.remove("hidden");
+  document.querySelectorAll("#contextOptions .context-btn").forEach(b => b.disabled = true);
+
+  const combo = pendingCombo;
+  pendingCombo = null;
+  setTimeout(() => finalizeContextualResult(combo, context), 1500);
+}
+
+async function finalizeContextualResult(combo, context){
+  const { comboResult, profileA, profileB, combinationRowId } = combo;
+  const reading = generateContextualReading(comboResult, context, profileA, profileB);
+
+  if (supabaseClient && combinationRowId){
+    try { await supabaseClient.from("combinations").update({ context }).eq("id", combinationRowId); }
+    catch(e){}
+  }
+
+  showContextualResult(reading, comboResult);
+}
+
+function showContextualResult(reading, comboResult){
+  const { nameA, nameB } = comboResult;
+  let html = "";
+  html += '<h1 class="screen-title" style="text-align:center">Космическа <span class="grad">комбинация</span></h1>';
+  html += '<p class="combo-vs">' + esc(nameA) + ' <span class="grad">×</span> ' + esc(nameB) + '</p>';
+
+  reading.layers.forEach((layer, i) => {
+    html += '<article class="glass card reveal layer-card d' + Math.min(i, 4) + '">' +
+      '<h2 class="card-label"><span class="dot' + (i % 2 ? ' cyan' : '') + '"></span>' + esc(layer.icon) + ' ' + esc(layer.title) + '</h2>' +
+      '<p class="rc-text" style="margin-top:11px">' + esc(layer.text) + '</p></article>';
+  });
 
   html += '<article class="glass card reveal d3"><h2 class="card-label"><span class="dot violet"></span>Обобщение</h2>' +
-    '<p class="rc-text" style="margin-top:11px">' + esc(result.summary) + '</p></article>';
+    '<p class="rc-text" style="margin-top:11px">' + esc(reading.summary) + '</p></article>';
 
   html += '<div class="btn-row" style="justify-content:center"><button class="ghost-btn" id="comboShareBtn" type="button">📋 Сподели</button></div>';
-  html += '<p class="disclaimer reveal" style="margin-top:14px">* Ъглите между планетите са реално изчислени от наталните карти. Тълкуването е за забавление — не е научен метод, нито брачен консултант.</p>';
+
+  html += '<h2 class="card-label" style="margin:24px 4px 6px"><span class="dot"></span>Пълни астрономически данни</h2>';
+  html += renderAstroDetailsHTML(comboResult);
+
+  html += '<p class="disclaimer reveal" style="margin-top:14px">* Ъглите между планетите са реално изчислени от наталните карти. Тълкуването (включително контекстното) е за забавление — не е научен метод, нито брачен консултант.</p>';
 
   $("combresultBody").innerHTML = html;
   showScreen("screen-combresult");
 
   $("comboShareBtn").addEventListener("click", () => {
-    const text = "Космическа комбинация: " + nameA + " × " + nameB + " — „" + result.summary + "“ · Ретрограден";
+    const text = "Космическа комбинация: " + nameA + " × " + nameB + " — „" + reading.summary + "“ · Ретрограден";
     if (navigator.share){
       navigator.share({ text }).catch(() => {});
     } else if (navigator.clipboard && navigator.clipboard.writeText){
