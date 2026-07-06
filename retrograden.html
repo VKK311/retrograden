@@ -198,6 +198,9 @@ select.field option{background:#0b0d22;color:var(--text)}
 
 .checkbox-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;font-size:.82rem;line-height:1.4;color:rgba(238,240,255,.72);cursor:pointer}
 .checkbox-row input{margin-top:3px;accent-color:var(--acid);width:16px;height:16px;flex-shrink:0}
+.radio-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:2px}
+.radio-label{display:flex;align-items:center;gap:7px;font-size:.85rem;color:rgba(238,240,255,.75);cursor:pointer}
+.radio-label input{accent-color:var(--acid);width:16px;height:16px}
 .field-hint{margin-top:8px;font-size:.75rem;color:rgba(238,240,255,.45);font-style:italic;min-height:0}
 .field[disabled]{opacity:.4;cursor:not-allowed}
 
@@ -477,6 +480,13 @@ select.field option{background:#0b0d22;color:var(--text)}
         <label class="f-label" for="natalName">Как те кръстиха?</label>
         <input class="field" id="natalName" type="text" autocomplete="off" maxlength="30" placeholder="Име (по желание)">
 
+        <label class="f-label">Пол (по желание)</label>
+        <div class="radio-row" id="natalGenderRow">
+          <label class="radio-label"><input type="radio" name="natalGender" value="male"> Мъж</label>
+          <label class="radio-label"><input type="radio" name="natalGender" value="female"> Жена</label>
+          <label class="radio-label"><input type="radio" name="natalGender" value="other"> Друго</label>
+        </div>
+
         <label class="f-label" for="natalDate">Дата на раждане</label>
         <input class="field" id="natalDate" type="date">
 
@@ -556,6 +566,13 @@ select.field option{background:#0b0d22;color:var(--text)}
 
         <label class="f-label" for="obName">Как да те наричаме?</label>
         <input class="field" id="obName" type="text" maxlength="30" placeholder="Твоето име…" autocomplete="given-name">
+
+        <label class="f-label">Пол (по желание)</label>
+        <div class="radio-row" id="obGenderRow">
+          <label class="radio-label"><input type="radio" name="obGender" value="male"> Мъж</label>
+          <label class="radio-label"><input type="radio" name="obGender" value="female"> Жена</label>
+          <label class="radio-label"><input type="radio" name="obGender" value="other"> Друго</label>
+        </div>
 
         <label class="f-label" for="obDate">Кога се появи на Земята?</label>
         <input class="field" id="obDate" type="date">
@@ -2062,6 +2079,9 @@ function nearestCity(lat, lon){
 
   function fillForm(data){
     $("natalName").value = data.name || "";
+    const genderToCheck = document.querySelector('input[name="natalGender"][value="' + (data.gender || "") + '"]');
+    document.querySelectorAll('input[name="natalGender"]').forEach(r => r.checked = false);
+    if (genderToCheck) genderToCheck.checked = true;
     $("natalDate").value = data.date || "";
     if (data.timeKnown){ timeInput.value = data.time || ""; noTimeBox.checked = false; timeInput.disabled = false; }
     else { timeInput.value = ""; noTimeBox.checked = true; timeInput.disabled = true; }
@@ -2160,8 +2180,10 @@ function nearestCity(lat, lon){
   $("natalBtn").addEventListener("click", () => {
     const dateVal = $("natalDate").value;
     if (!dateVal){ toast("Нужна е поне дата на раждане. Космосът смята, не гадае."); return; }
+    const genderInput = document.querySelector('input[name="natalGender"]:checked');
     const data = {
       name: $("natalName").value.trim(),
+      gender: genderInput ? genderInput.value : null,
       date: dateVal,
       timeKnown: !noTimeBox.checked,
       time: noTimeBox.checked ? "" : timeInput.value,
@@ -2352,6 +2374,7 @@ async function syncProfileToCloud(profile){
     await supabaseClient.from("profiles").upsert({
       id: profile.id,
       display_name: profile.name,
+      gender: profile.gender || null,
       email: profile.email || null,
       birth_date: profile.birthDate,
       birth_time: profile.birthTime || null,
@@ -2375,7 +2398,7 @@ async function loadProfileFromCloud(userId){
 /* Изгражда профил от форма + изчислена карта; пише И ДВАТА
    localStorage ключа (профил + натални данни за екран „ДНК"),
    за да има една истина навсякъде. */
-function buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town }){
+function buildAndSaveProfile({ name, gender, birthDate, birthTime, timeKnown, town }){
   const [y, m, d] = birthDate.split("-").map(Number);
   let h = 12, min = 0; /* обяд по подразбиране — само за Слънце/Луна/планети, НИКОГА за Асцендент */
   if (timeKnown && birthTime){ const [hh, mm] = birthTime.split(":").map(Number); h = hh; min = mm; }
@@ -2384,6 +2407,7 @@ function buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town }){
   const profile = {
     id: existing && existing.id ? existing.id : generateUserId(),
     name,
+    gender: gender !== undefined ? gender : (existing ? existing.gender || null : null),
     birthDate,
     birthTime: timeKnown ? birthTime : "",
     timeKnown: !!timeKnown,
@@ -2394,7 +2418,7 @@ function buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town }){
   saveLocalProfile(profile);
   try {
     localStorage.setItem(NATAL_KEY, JSON.stringify({
-      name, date: birthDate, timeKnown: !!timeKnown,
+      name, gender: profile.gender, date: birthDate, timeKnown: !!timeKnown,
       time: timeKnown ? birthTime : "", cityLabel: town.label
     }));
   } catch(e){}
@@ -2408,6 +2432,7 @@ function updateProfileFromNatalData(data){
   if (!town || !data.date) return; /* без град от списъка няма координати за профил */
   buildAndSaveProfile({
     name: data.name || "Безименна легенда",
+    gender: data.gender !== undefined ? data.gender : null,
     birthDate: data.date,
     birthTime: data.time || "",
     timeKnown: !!data.timeKnown,
@@ -2737,6 +2762,7 @@ async function createInvite(){
     const { error } = await supabaseClient.from("combination_invites").insert({
       inviter_id: profile.id,
       inviter_name: profile.name,
+      inviter_gender: profile.gender || null,
       code,
       inviter_chart: profile.chart,
       expires_at: expiresAt
@@ -2948,6 +2974,8 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
 
   $("obSubmit").addEventListener("click", () => {
     const name = $("obName").value.trim();
+    const genderInput = document.querySelector('input[name="obGender"]:checked');
+    const gender = genderInput ? genderInput.value : null;
     const birthDate = $("obDate").value;
     const timeKnown = !noTime.checked;
     const birthTime = timeKnown ? timeInput.value : "";
@@ -2958,7 +2986,7 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
     if (timeKnown && !birthTime){ toast("Или въведи час, или признай, че не го знаеш. И двете са достойни."); return; }
     if (!town){ toast("Градът не е от списъка с 259. Космосът иска координати."); return; }
 
-    const profile = buildAndSaveProfile({ name, birthDate, birthTime, timeKnown, town });
+    const profile = buildAndSaveProfile({ name, gender, birthDate, birthTime, timeKnown, town });
     if (!profile.chart){
       toast("Астрономията не се зареди — картата ще се изчисли при следващото отваряне с интернет.");
     }
@@ -2985,6 +3013,7 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
         if (town){
           profile = buildAndSaveProfile({
             name: legacy.name || "Безименна легенда",
+            gender: legacy.gender !== undefined ? legacy.gender : null,
             birthDate: legacy.date,
             birthTime: legacy.time || "",
             timeKnown: !!legacy.timeKnown,

@@ -18,6 +18,7 @@
 CREATE TABLE profiles (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   display_name TEXT NOT NULL,
+  gender TEXT,
   email TEXT,
   birth_date TEXT NOT NULL,
   birth_time TEXT,
@@ -34,6 +35,7 @@ CREATE TABLE combination_invites (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   inviter_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
   inviter_name TEXT NOT NULL,
+  inviter_gender TEXT,
   code TEXT UNIQUE NOT NULL,
   inviter_chart JSONB NOT NULL,
   used_by TEXT REFERENCES profiles(id),
@@ -49,6 +51,7 @@ CREATE TABLE combinations (
   user_b_id TEXT REFERENCES profiles(id),
   user_a_name TEXT,
   user_b_name TEXT,
+  context TEXT,
   result_json JSONB NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -66,3 +69,13 @@ CREATE POLICY "Insert invite" ON combination_invites FOR INSERT WITH CHECK (true
 CREATE POLICY "Update invite" ON combination_invites FOR UPDATE USING (true);
 CREATE POLICY "Public read combinations" ON combinations FOR SELECT USING (true);
 CREATE POLICY "Insert combination" ON combinations FOR INSERT WITH CHECK (true);
+
+-- ============================================================
+-- МИГРАЦИЯ v1.7 · Пол + контекст на четенето
+-- Ако базата вече съществува (създадена преди тази версия), пусни
+-- само блока по-долу в SQL Editor — идемпотентен е (IF NOT EXISTS),
+-- безопасен за повторно изпълнение.
+-- ============================================================
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE combination_invites ADD COLUMN IF NOT EXISTS inviter_gender TEXT;
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS context TEXT;
