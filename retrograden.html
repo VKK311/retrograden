@@ -3842,7 +3842,8 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
     const cloudNewer = cloud.updated_at && (!profile.updatedAt || new Date(cloud.updated_at) > new Date(profile.updatedAt));
     if (!cloudNewer) return;
     saveLocalProfile({
-      id: cloud.id, name: cloud.display_name, birthDate: cloud.birth_date,
+      id: cloud.id, name: cloud.display_name, gender: cloud.gender || null, email: cloud.email || null,
+      birthDate: cloud.birth_date,
       birthTime: cloud.birth_time || "", timeKnown: !!cloud.birth_time,
       city: cloud.birth_city, lat: Number(cloud.birth_lat), lon: Number(cloud.birth_lon),
       chart: cloud.natal_chart, updatedAt: cloud.updated_at
