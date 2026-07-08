@@ -221,6 +221,14 @@ select.field option{background:#0b0d22;color:var(--text)}
 .field[type="date"], .field[type="time"]{
   padding-right:44px;min-height:48px;color-scheme:dark;
   background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);
+  /* iOS Safari игнорира width:100% за тези два типа полета — вътрешният
+     wheel-контрол носи собствена минимална ширина, по-голяма от кутията,
+     и полето прелива извън картата. min-width:0 отменя стандартния
+     min-width:auto (който за replaced елементи се пада към intrinsic
+     ширината); -webkit-min-logical-width е конкретно за WebKit datetime
+     контроли. */
+  box-sizing:border-box;min-width:0;max-width:100%;
+  -webkit-min-logical-width:0px!important;
 }
 .field[type="date"]::-webkit-calendar-picker-indicator,
 .field[type="time"]::-webkit-calendar-picker-indicator{
