@@ -336,16 +336,17 @@ select.field option{background:#0b0d22;color:var(--text)}
 .moon-track{position:relative;height:4px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden}
 .moon-track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--acid));transition:width .9s cubic-bezier(.22,.9,.25,1)}
 
-.event-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
-.event-row:last-child{border-bottom:none}
-.event-icon{font-size:16px;flex:none;width:22px;text-align:center;line-height:1}
-.event-label{flex:1;color:rgba(238,240,255,.86)}
-.event-when{flex:none;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--muted2);text-transform:uppercase}
-.event-when.today{color:#ff5a7a;animation:livePulse 1.6s ease-in-out infinite}
-.event-when.tomorrow{color:var(--acid)}
-@media (prefers-reduced-motion: reduce){
-  .event-when.today{animation:none}
-}
+/* ---------- Космическо РЮ (5 лични дневни индикатора) ---------- */
+.rj-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.rj-row:last-child{border-bottom:none}
+.rj-main{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.rj-label{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:rgba(238,240,255,.92)}
+.rj-icon{font-size:15px;flex:none}
+.rj-stars{flex:none;font-size:13px;letter-spacing:.05em;color:var(--acid);white-space:nowrap;padding-top:1px}
+.rj-stars .dim{color:rgba(238,240,255,.16)}
+.rj-text{font-size:12.5px;color:var(--muted);line-height:1.5}
+.rj-summary{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:13.5px;font-style:italic;line-height:1.6;color:rgba(238,240,255,.85)}
+.rj-empty{font-size:13.5px;color:var(--muted);line-height:1.6}
 
 .what-changed{transition:opacity .6s ease, transform .6s ease}
 .what-changed.fading{opacity:0;transform:translateY(-8px)}
@@ -485,9 +486,10 @@ select.field option{background:#0b0d22;color:var(--text)}
         <p class="astro-source" id="astroSource">Изчислено от реалните позиции на планетите за днес.</p>
       </article>
 
-      <article class="glass card reveal d3 hidden" id="upcomingCard">
-        <h2 class="card-label"><span class="dot violet"></span>Предстоящи събития</h2>
-        <div id="upcomingList"></div>
+      <article class="glass card reveal d3 hidden" id="dailyRjCard">
+        <h2 class="card-label"><span class="dot violet"></span>Твоят дневен РЮ от Космоса</h2>
+        <div id="dailyRjList"></div>
+        <p class="rj-summary hidden" id="dailyRjSummary"></p>
       </article>
 
       <article class="glass card reveal d4 hidden" id="personalCard">
@@ -1287,83 +1289,408 @@ function chaosScore(sky){
 }
 
 /* ============================================================
-   ПРЕДСТОЯЩИ СЪБИТИЯ · сканира напред ден по ден и засича реални
-   преходи (фаза на Луната, смяна на лунен знак, ретрограден флип
-   на Меркурий/Венера/Марс). Изпълнява се на малки парчета през
-   setTimeout(0), за да не блокира UI — computeSky() за 60 дни е
-   бързо (~30-60ms общо на десктоп в тестове), но на по-бавен телефон
-   90 синхронни извиквания могат да засекат кадър, затова chunk-ваме
-   независимо. Резултатът се кешира за деня — не пресмятаме наново
-   при всеки hourly refresh, само при реална смяна на календарния ден. */
-const UPCOMING_HORIZON_DAYS = 60;
-const UPCOMING_CHUNK_SIZE = 15;
+   КОСМИЧЕСКО РЮ · 5 лични дневни индикатора (транзити × натална
+   карта). Заменя по-старите "Предстоящи събития" — вместо да гледа
+   напред във времето, гледа НАВЪТРЕ във всеки конкретен потребител:
+   всеки индикатор е различен за всеки човек, всеки ден.
 
-function computeUpcomingEvents(referenceDate, onDone){
-  if (typeof Astronomy === "undefined"){ onDone([]); return; }
-  const events = [];
-  let prevSky = computeSky(new Date(referenceDate.getTime() - 86400000)); /* вчера, за да хванем "случило се днес" */
-  if (!prevSky){ onDone([]); return; }
-  let day = 0;
+   Изчислителна база: getAspect() (СЪЩЕСТВУВАЩА, непроменена) винаги
+   връща най-близкия класически аспект между два ъгъла — затова всеки
+   от факторите по-долу винаги "гърми" с някаква стойност; именно
+   затова тежестите са скромни (виж coментара на mapToStars) — идеята
+   е сборът от няколко независими фактора статистически да се събере
+   някъде към средата повечето дни, с рядко подравняване към
+   крайностите.
+   ============================================================ */
+const PERSONAL_TRANSIT_PLANETS = ["Sun","Moon","Mercury","Venus","Mars"];
 
-  const RETRO_PLANETS = [
-    { key:"mercury", label:"Меркурий", icon:"☿", retroWord:"ретрограден", directWord:"директен" },
-    { key:"venus",   label:"Венера",   icon:"♀", retroWord:"ретроградна", directWord:"директна" },
-    { key:"mars",    label:"Марс",     icon:"♂", retroWord:"ретрограден", directWord:"директен" }
-  ];
-
-  function processChunk(){
-    const chunkEnd = Math.min(day + UPCOMING_CHUNK_SIZE, UPCOMING_HORIZON_DAYS);
-    for (; day < chunkEnd; day++){
-      const d = new Date(referenceDate.getTime() + day * 86400000);
-      const sky = computeSky(d);
-      if (!sky){ continue; }
-
-      if (prevSky.phase.key !== "full_moon" && sky.phase.key === "full_moon"){
-        events.push({ type:"full_moon", icon:"🌕", label:"Пълнолуние", date:d, daysUntil: day });
-      }
-      if (prevSky.phase.key !== "new_moon" && sky.phase.key === "new_moon"){
-        events.push({ type:"new_moon", icon:"🌑", label:"Новолуние", date:d, daysUntil: day });
-      }
-      if (prevSky.moonSignIdx !== sky.moonSignIdx){
-        events.push({
-          type:"moon_sign", icon:"☽",
-          label:"Луна влиза в " + sky.moonSign.symbol + " " + sky.moonSign.name,
-          date:d, daysUntil: day
-        });
-      }
-      RETRO_PLANETS.forEach(p => {
-        const wasRetro = prevSky[p.key + "Retro"], isRetro = sky[p.key + "Retro"];
-        if (wasRetro !== isRetro){
-          events.push({
-            type: p.key + (isRetro ? "_retro" : "_direct"), icon: p.icon,
-            label: p.label + " става " + (isRetro ? p.retroWord : p.directWord),
-            date:d, daysUntil: day
-          });
-        }
-      });
-
-      prevSky = sky;
-    }
-
-    if (day < UPCOMING_HORIZON_DAYS){
-      setTimeout(processChunk, 0);
-    } else {
-      events.sort((a, b) => a.daysUntil - b.daysUntil);
-      /* Луната сменя знак на всеки ~2.3 дни — без ограничение би
-         запълнила и четирите слота само с това, изтласквайки
-         по-редките (пълнолуние/новолуние, ретрограден флип). Пазим
-         най-много 1 лунна смяна на знак (най-близката), останалите
-         слотове са за по-рядкото. */
-      const special = events.filter(e => e.type !== "moon_sign");
-      const moonSignEvents = events.filter(e => e.type === "moon_sign");
-      let picked = special.slice(0, 4);
-      if (picked.length < 4 && moonSignEvents.length) picked.push(moonSignEvents[0]);
-      picked.sort((a, b) => a.daysUntil - b.daysUntil);
-      onDone(picked.slice(0, 4));
-    }
+/* Точните дълготи на транзитните планети — computeSky() пази само
+   знак-индекс (30° резолюция), недостатъчен за аспектна орбиса.
+   Отделна функция, не пипа computeSky(). */
+function computeTransitLongitudes(date){
+  if (typeof Astronomy === "undefined") return null;
+  try {
+    function elon(body, d){ return Astronomy.Ecliptic(Astronomy.GeoVector(body, d, true)).elon; }
+    const out = {};
+    NATAL_BODIES.forEach(name => {
+      const lon = elon(Astronomy.Body[name], date);
+      out[name] = { lon, signIdx: Math.floor((((lon % 360) + 360) % 360) / 30) };
+    });
+    return out;
+  } catch (e){
+    console.warn("Транзитните дълготи не се изчислиха:", e);
+    return null;
   }
-  processChunk();
 }
+
+/* transitName/natalName: имена от NATAL_BODIES, или "Ascendant" за
+   натален Асцендент. sign обръща посоката (напр. Марс×Асцендент за
+   "Драма метър" — твърд аспект = ПОВЕЧЕ драма, не по-малко). */
+function aspectFactor(transits, chart, transitName, natalName, weight, sign){
+  sign = sign === undefined ? 1 : sign;
+  const t = transits[transitName];
+  let natalLon, natalSignIdx;
+  if (natalName === "Ascendant"){ natalLon = chart.ascendant.longitude; natalSignIdx = chart.ascendant.signIdx; }
+  else { const n = chart.planets.find(p => p.name === natalName); natalLon = n.longitude; natalSignIdx = n.signIdx; }
+  const asp = getAspect(t.lon - natalLon);
+  return {
+    contribution: sign * asp.strength * weight,
+    reason: { type:"aspect", transitPlanet:transitName, transitSignIdx:t.signIdx, aspectName:asp.name, natalPlanet:natalName, natalSignIdx }
+  };
+}
+
+/* Транзитна планета в конкретен натален дом (Whole Sign, съществуващ
+   механизъм от personalizeToday() — само повторно изразен тук). */
+function houseFactor(transits, ascSignIdx, transitName, targetHouse, bonus){
+  const t = transits[transitName];
+  const h = ((t.signIdx - ascSignIdx + 12) % 12) + 1;
+  if (h !== targetHouse) return { contribution: 0, reason: null };
+  return { contribution: bonus, reason: { type:"house", transitPlanet:transitName, transitSignIdx:t.signIdx, house:h } };
+}
+
+/* От няколко кандидат-натални тела взима този с най-силен принос
+   (по contribFn) — за фактори тип "Плутон/Уран × лични планети",
+   където интересува само НАЙ-впечатляващият контакт, не всичките. */
+function strongestOf(transits, chart, transitName, natalNames, weight, contribFn){
+  let best = null;
+  natalNames.forEach(nm => {
+    const t = transits[transitName];
+    const n = chart.planets.find(p => p.name === nm);
+    const asp = getAspect(t.lon - n.longitude);
+    const contribution = contribFn(asp.strength) * weight;
+    if (!best || Math.abs(contribution) > Math.abs(best.contribution)){
+      best = { contribution, reason: { type:"aspect", transitPlanet:transitName, transitSignIdx:t.signIdx, aspectName:asp.name, natalPlanet:nm, natalSignIdx:n.signIdx } };
+    }
+  });
+  return best;
+}
+
+/* Брой ретроградни планети точно сега — личните (Меркурий/Венера/
+   Марс) тежат повече от външните (Юпитер/Сатурн), както в chaosScore(). */
+function retroFactor(sky, personalWeight, outerWeight){
+  const personal = [sky.mercuryRetro, sky.venusRetro, sky.marsRetro].filter(Boolean).length;
+  const outer = [sky.jupiterRetro, sky.saturnRetro].filter(Boolean).length;
+  const total = personal + outer;
+  return { contribution: personal * personalWeight + outer * outerWeight,
+    reason: total > 0 ? { type:"retro", count: total } : null };
+}
+
+/* Сумира факторите (база 50/100), пази фактора с най-голям принос по
+   абсолютна стойност като "причина" за текста. */
+function computeIndicatorScore(factors){
+  let score = 50, dominant = null, domAbs = -1;
+  factors.forEach(f => {
+    if (!f) return;
+    score += f.contribution;
+    if (f.reason === null) return; /* тихи фактори (калибровка, дребни бонуси) — не стават "причина" за текста */
+    const a = Math.abs(f.contribution);
+    if (a > domAbs){ domAbs = a; dominant = f.reason; }
+  });
+  return { score: Math.max(0, Math.min(100, score)), reason: dominant };
+}
+
+/* 0-100 → 1-5 звезди. Средната лента (36-65) е нарочно най-широка —
+   повечето дни трябва да минат за 2-4 звезди, 1 и 5 да са редки. */
+function mapToStars(score){
+  if (score <= 15) return 1;
+  if (score <= 35) return 2;
+  if (score <= 65) return 3;
+  if (score <= 85) return 4;
+  return 5;
+}
+
+/* Калибровъчна корекция на разпределението: getAspect() (защитена,
+   непроменяема) има вградено положително отклонение — благоприятните
+   ленти (съвпад/секстил/тригон) покриват по-широк ъглов диапазон от
+   неблагоприятните (квадратура/опозиция), затова сборът от няколко
+   фактора естествено се измества над база 50 (измерено емпирично —
+   виж test_rj_rawscores.js в scratchpad тестовете: средни суровини
+   60-71 вместо ~50). Стойностите тук само центрират разпределението
+   обратно към средата, не пипат самите астрономически данни. */
+const RJ_CALIBRATION = { love:-10, drama:-19, intuition:-16, finance:-5, battery:-21 };
+function calibration(key){ return { contribution: RJ_CALIBRATION[key], reason: null }; }
+
+function computeLoveIndicator(chart, transits){
+  const ascIdx = chart.ascendant.signIdx;
+  return computeIndicatorScore([
+    aspectFactor(transits, chart, "Venus", "Venus", 7),
+    houseFactor(transits, ascIdx, "Venus", 7, 12),
+    aspectFactor(transits, chart, "Moon", "Venus", 4),
+    houseFactor(transits, ascIdx, "Sun", 7, 8),
+    aspectFactor(transits, chart, "Jupiter", "Venus", 4),
+    calibration("love")
+  ]);
+}
+
+function computeDramaIndicator(chart, transits, sky){
+  const ascIdx = chart.ascendant.signIdx;
+  return computeIndicatorScore([
+    aspectFactor(transits, chart, "Mars", "Ascendant", 6, -1),
+    aspectFactor(transits, chart, "Mars", "Mars", 6, -1),
+    strongestOf(transits, chart, "Pluto", PERSONAL_TRANSIT_PLANETS, 5, s => Math.abs(s)),
+    retroFactor(sky, 5, 2),
+    strongestOf(transits, chart, "Uranus", PERSONAL_TRANSIT_PLANETS, 4, s => Math.abs(s)),
+    calibration("drama")
+  ]);
+}
+
+function computeIntuitionIndicator(chart, transits, sky){
+  const ascIdx = chart.ascendant.signIdx;
+  return computeIndicatorScore([
+    aspectFactor(transits, chart, "Neptune", "Moon", 7),
+    aspectFactor(transits, chart, "Moon", "Neptune", 4),
+    houseFactor(transits, ascIdx, "Neptune", 12, 8),
+    houseFactor(transits, ascIdx, "Moon", 12, 6),
+    aspectFactor(transits, chart, "Moon", "Mercury", 4),
+    { contribution: sky.mercuryRetro ? 0 : 5, reason: null },
+    calibration("intuition")
+  ]);
+}
+
+function computeFinanceIndicator(chart, transits){
+  const ascIdx = chart.ascendant.signIdx;
+  return computeIndicatorScore([
+    aspectFactor(transits, chart, "Jupiter", "Saturn", 6),
+    houseFactor(transits, ascIdx, "Jupiter", 2, 10),
+    houseFactor(transits, ascIdx, "Venus", 2, 6),
+    aspectFactor(transits, chart, "Saturn", "Venus", 5),
+    houseFactor(transits, ascIdx, "Saturn", 2, -8),
+    calibration("finance")
+  ]);
+}
+
+function computeBatteryIndicator(chart, transits, sky){
+  const ascIdx = chart.ascendant.signIdx;
+  return computeIndicatorScore([
+    aspectFactor(transits, chart, "Sun", "Mars", 6),
+    aspectFactor(transits, chart, "Mars", "Sun", 6),
+    aspectFactor(transits, chart, "Moon", "Ascendant", 5),
+    retroFactor(sky, -4, -2),
+    strongestOf(transits, chart, "Saturn", PERSONAL_TRANSIT_PLANETS, 4, s => s),
+    calibration("battery")
+  ]);
+}
+
+const DAILY_RJ_INDICATORS = [
+  { key:"love",      icon:"❤️", label:"Любовен фронт",        compute: computeLoveIndicator },
+  { key:"drama",     icon:"⚡", label:"Драма метър",           compute: computeDramaIndicator },
+  { key:"intuition", icon:"🧠", label:"Шестото ти чувство",    compute: computeIntuitionIndicator },
+  { key:"finance",   icon:"💰", label:"Финансови сапунки",     compute: computeFinanceIndicator },
+  { key:"battery",   icon:"🔋", label:"Социална батерия",      compute: computeBatteryIndicator }
+];
+
+const PLANET_POSSESSIVE = {
+  Sun:"твоето Слънце", Moon:"твоята Луна", Mercury:"твоя Меркурий", Venus:"твоята Венера",
+  Mars:"твоя Марс", Jupiter:"твоя Юпитер", Saturn:"твоя Сатурн", Uranus:"твоя Уран",
+  Neptune:"твоя Нептун", Pluto:"твоя Плутон", Ascendant:"твоя Асцендент"
+};
+
+/* Превръща структурираната "причина" в четим български текст,
+   вкарван през {reason} в шаблоните от INDICATOR_TEXTS. */
+function formatReason(r){
+  if (!r) return "Космосът засега мълчи по този въпрос";
+  const signOf = idx => SIGNS[idx].symbol + " " + SIGNS[idx].name;
+  const tp = name => NATAL_BODIES_BG[name] || name;
+  if (r.type === "aspect"){
+    const poss = PLANET_POSSESSIVE[r.natalPlanet] || ("твоя " + tp(r.natalPlanet));
+    return tp(r.transitPlanet) + " в " + signOf(r.transitSignIdx) + " " + r.aspectName + " " + poss + " в " + signOf(r.natalSignIdx);
+  }
+  if (r.type === "house"){
+    return tp(r.transitPlanet) + " в твоя " + r.house + "-и дом";
+  }
+  if (r.type === "retro"){
+    return r.count + (r.count === 1 ? " ретроградна планета точно сега" : " ретроградни планети точно сега");
+  }
+  return "Космосът засега мълчи по този въпрос";
+}
+
+/* Стабилен избор в рамките на деня (кеширано по-долу), но обвързан
+   с конкретната астрономическа причина — различна причина обичайно
+   значи различен вариант текст, не линеен брояч по ден. */
+function pickTextVariant(bank, seedParts){
+  if (!bank || !bank.length) return null;
+  const idx = hashDate(seedParts.join("|")) % bank.length;
+  return bank[idx];
+}
+
+function getIndicatorText(key, level, reason, date){
+  const bank = INDICATOR_TEXTS[key] && INDICATOR_TEXTS[key][level];
+  const reasonText = formatReason(reason);
+  const seed = [isoOf(date), key, level, reason ? reason.type : "none",
+    reason ? reason.transitPlanet : "", reason ? reason.natalPlanet || "" : "", reason ? reason.aspectName || "" : ""];
+  const tpl = pickTextVariant(bank, seed);
+  if (!tpl) return reasonText + ".";
+  return tpl.replace(/\{reason\}/g, reasonText);
+}
+
+/* Обобщението синтезира най-високия и най-ниския индикатор — не
+   повтаря буквално техните текстове, добавя нова гледна точка. */
+function generateDailySummary(indicators, date){
+  const sorted = indicators.slice().sort((a, b) => b.stars - a.stars);
+  const high = sorted[0], low = sorted[sorted.length - 1];
+  const seed = [isoOf(date), "summary", high.key, low.key];
+  const tpl = pickTextVariant(SUMMARY_TEMPLATES, seed);
+  if (!tpl) return "";
+  return tpl
+    .replace(/\{highLabel\}/g, high.label.toLowerCase())
+    .replace(/\{lowLabel\}/g, low.label.toLowerCase())
+    .replace(/\{highReason\}/g, formatReason(high.reason))
+    .replace(/\{lowReason\}/g, formatReason(low.reason));
+}
+
+/* Пълното изчисление на дневното РЮ за една конкретна дата + карта.
+   Не кешира само по себе си — кеширането (за деня, sessionStorage)
+   е отговорност на извикващия (renderDailyRJ в екран „Днес"). */
+function computeDailyRJ(chart, date){
+  if (!chart) return null;
+  const transits = computeTransitLongitudes(date);
+  const sky = computeSky(date);
+  if (!transits || !sky) return null;
+  const indicators = DAILY_RJ_INDICATORS.map(meta => {
+    const { score, reason } = meta.compute(chart, transits, sky);
+    const stars = mapToStars(score);
+    const level = stars >= 4 ? "high" : stars === 3 ? "medium" : "low";
+    const text = getIndicatorText(meta.key, level, reason, date);
+    return { key:meta.key, icon:meta.icon, label:meta.label, stars, level, reason, text };
+  });
+  const summary = generateDailySummary(indicators, date);
+  return { indicators, summary };
+}
+
+/* Текстови банки: 5 индикатора × 3 нива (high/medium/low) × 5 варианта
+   + 10 обобщителни шаблона. Виж formatReason()/getIndicatorText()/
+   generateDailySummary() по-горе за точния формат на {reason}/
+   {highLabel}/{lowLabel}/{highReason}/{lowReason} токените. */
+const INDICATOR_TEXTS = {
+  love: {
+    high: [
+      "{reason}. Дори бившите ти биха ти завидели — тихо, разбира се.",
+      "{reason}. Ако не си във връзка, днес е добър ден да отвориш чата, който отлагаш от седмица.",
+      "{reason}. Флиртът тече без усилие — не го проваляй с прекалено мислене.",
+      "{reason}. Венера явно ти дължи услуга и е решила да си я върне точно сега.",
+      "{reason}. Дори груповият чат за ергенско ще одобри тази енергия."
+    ],
+    medium: [
+      "{reason}. Нито голяма любов, нито голяма драма — просто вторник с лека романтика.",
+      "{reason}. Химията е налична, но не форсирана — вземи я или я остави.",
+      "{reason}. Връзката ти не се решава днес, нито на добре, нито на зле.",
+      "{reason}. Стига за едно съобщение с емоджита, не за декларация пред всички.",
+      "{reason}. Романтиката е на автопилот — нищо специално, нищо счупено."
+    ],
+    low: [
+      "{reason}. Не пращай съобщението.",
+      "{reason}. Днес не е ден за сърдечни откровения.",
+      "{reason}. Изкушението за флирт е капан — подмини го.",
+      "{reason}. Не звъни на бившия — никога не е добра идея, но днес особено.",
+      "{reason}. Романтиката взима почивен ден — не я насилвай."
+    ]
+  },
+  drama: {
+    high: [
+      "{reason}. Днес или ставаш звездата на груповия чат, или причината за него.",
+      "{reason}. Драмата е гарантирана — дали е забавна или скандална, зависи изцяло от теб.",
+      "{reason}. Ще го разказваш със смях или ще искаш да го изтриеш от паметта си — засега не е ясно кое.",
+      "{reason}. Вечерта има потенциал за история, която или ще разказваш години, или ще спестиш на всички.",
+      "{reason}. Космосът зарежда сюжет с главна роля твоя — жанрът е все още неопределен."
+    ],
+    medium: [
+      "{reason}. Леко напрежение витае, но нищо, което едно кафе не оправя.",
+      "{reason}. Ден с искрица, не с пожар — засега.",
+      "{reason}. Дребна пикантерия в ефира, без реален залог.",
+      "{reason}. Има повод за коментар в чата, няма повод за паника.",
+      "{reason}. Атмосферата е леко наелектризирана — точно колкото да е интересно."
+    ],
+    low: [
+      "{reason}. Тих ден — дори за скандал няма материал.",
+      "{reason}. Никаква драма на хоризонта, колкото и разочароващо да звучи.",
+      "{reason}. Дори груповият чат няма за какво да гори днес.",
+      "{reason}. Спокойствие без изненади, за разнообразие.",
+      "{reason}. Нищо за разказване довечера — дишай, заслужи си го."
+    ]
+  },
+  intuition: {
+    high: [
+      "{reason}. Вътрешният ти глас говори ясно — за веднъж си струва да го послушаш.",
+      "{reason}. Инстинктът ти работи на ниво детектив, не на ниво параноя.",
+      "{reason}. Усещаш нещата преди да се случат — използвай го разумно.",
+      "{reason}. Шестото ти чувство е на пълна мощност — довери му се веднъж.",
+      "{reason}. Предчувствията ти днес имат по-добра точност от Google Maps."
+    ],
+    medium: [
+      "{reason}. Интуицията ти работи, но не на максимум — провери фактите все пак.",
+      "{reason}. Вътрешният глас шепне, не крещи — слушай внимателно.",
+      "{reason}. Усещанията ти са наред, но не са гаранция, както обикновено.",
+      "{reason}. Нито ясновидство, нито глухота — просто обичайна проницателност.",
+      "{reason}. Инстинктът ти дава подсказки, не готови отговори."
+    ],
+    low: [
+      "{reason}. Днес интуицията ти мълчи — разчитай на факти, не на усещания.",
+      "{reason}. Шестото ти чувство е в почивка, не му вярвай засега.",
+      "{reason}. Предчувствията ти днес не се броят за нищо.",
+      "{reason}. Вътрешният глас е зает с други неща — реши сам, трезво.",
+      "{reason}. Инстинктът ти греши повече от обичайното — провери два пъти."
+    ]
+  },
+  finance: {
+    high: [
+      "{reason}. Дори счетоводителят ти ще одобри тази комбинация.",
+      "{reason}. Парите работят за теб днес, а не обратното — отбележи си рядкостта.",
+      "{reason}. Бюджетът ти диша спокойно, за пръв път този месец.",
+      "{reason}. Финансова дисциплина без усилие — почти подозрително добре.",
+      "{reason}. Сметките се подреждат сами — не разваляй магията с нова поръчка."
+    ],
+    medium: [
+      "{reason}. Парите са наред — не забогатяваш, но не обедняваш.",
+      "{reason}. Бюджетът държи, стига да не отвориш още един таб за пазаруване.",
+      "{reason}. Финансово е скучно, в добрия смисъл на думата.",
+      "{reason}. Сметката излиза, макар и без излишък.",
+      "{reason}. Нито разход за жалене, нито доход за хвалене."
+    ],
+    low: [
+      "{reason}. Не купувай нищо ново днес — сериозно.",
+      "{reason}. Картата остава в чантата, довери ми се.",
+      "{reason}. Днес не е ден нито за инвестиции, нито за импулсивни поръчки.",
+      "{reason}. Сметките напомнят за себе си точно сега — плати каквото трябва.",
+      "{reason}. Не подписвай нищо финансово днес."
+    ]
+  },
+  battery: {
+    high: [
+      "{reason}. Енергията ти за хора е на максимум — излез от вкъщи, докато трае.",
+      "{reason}. Социалната ти батерия е пълна — организирай нещо, преди да се изпразни.",
+      "{reason}. Готов си за компания, разговори и поне един неочакван гост.",
+      "{reason}. Днес извличаш енергия от хората, вместо да ти я взимат.",
+      "{reason}. Батерията свети зелено — обади се на приятеля, когото отлагаш от седмица."
+    ],
+    medium: [
+      "{reason}. Енергията ти стига за среща, не за парти до късно.",
+      "{reason}. Социално си наред — нито затворник, нито душата на купона.",
+      "{reason}. Батерията е на средно ниво — избирателен си с кого излизаш.",
+      "{reason}. Достатъчно сили за един разговор, не за групов чат с драма.",
+      "{reason}. Нито искаш компания, нито бягаш от нея — обичаен ден."
+    ],
+    low: [
+      "{reason}. Батерията е на червено — откажи поканата.",
+      "{reason}. Днес не ти достигат хора — избягвай ги, докато можеш.",
+      "{reason}. Социалният ти резерв е празен — не го хаби за чужди проблеми.",
+      "{reason}. Остани вкъщи, хората ще преживеят отсъствието ти.",
+      "{reason}. Не отговаряй на поканата сега — по-късно ще имаш сили."
+    ]
+  }
+};
+
+const SUMMARY_TEMPLATES = [
+  "Днес печели {highLabel}, а {lowLabel} си взима почивен ден. Разпредели си очакванията според това.",
+  "{highLabel} е на светофара със зелено, {lowLabel} — на червено. Планирай деня си съответно.",
+  "Космосът избра тема на деня: {highLabel}. {lowLabel} засега не е поканен на партито.",
+  "Ако трябва да заложиш на едно нещо днес, заложи на {highLabel} — {lowLabel} не се брои за сигурна инвестиция.",
+  "{highReason} издърпа {highLabel} нагоре, докато {lowReason} дърпа {lowLabel} надолу. Такъв е балансът за днес.",
+  "Денят има двама главни герои: {highLabel}, който блести, и {lowLabel}, който мълчи в ъгъла.",
+  "Не очаквай чудеса откъм {lowLabel} — енергията днес отиде изцяло при {highLabel}.",
+  "{highLabel} носи добрите новини днес. За {lowLabel} по-добре не питай.",
+  "Балансът е ясен: инвестирай внимание в {highLabel}, а {lowLabel} остави за друг ден.",
+  "Космосът разпредели ресурсите неравномерно днес — {highLabel} взе лъвския пай, {lowLabel} остана на трохи."
+];
 
 function renderChips(sky){
   const el = $("chipsRow");
@@ -1830,34 +2157,59 @@ function nearestCity(lat, lon){
     return reasons.length ? reasons.join(", ") : null;
   }
 
-  /* Предстоящи събития — computeUpcomingEvents() е асинхронна (chunk-
-     ва сканирането), кешираме резултата за календарния ден, за да не
-     преизчисляваме 60-дневен хоризонт на всеки часови тик. */
-  let upcomingCache = { dateKey: null, events: null };
-  function renderUpcomingEvents(events){
-    const card = $("upcomingCard");
-    const list = $("upcomingList");
-    if (!card || !list) return;
-    if (!events || !events.length){ card.classList.add("hidden"); return; }
-    list.innerHTML = events.map(ev => {
-      let when;
-      if (ev.daysUntil === 0) when = '<span class="event-when today">ДНЕС</span>';
-      else if (ev.daysUntil === 1) when = '<span class="event-when tomorrow">УТРЕ</span>';
-      else when = '<span class="event-when">след ' + ev.daysUntil + ' дни</span>';
-      return '<div class="event-row"><span class="event-icon">' + ev.icon + '</span><span class="event-label">' + esc(ev.label) + '</span>' + when + '</div>';
-    }).join("");
-    card.classList.remove("hidden");
+  /* Космическо РЮ — 5 лични индикатора (транзити × натална карта).
+     Изисква запазена натална карта с час и разпознат град (както
+     personalCard) — иначе честно показва покана да си направиш
+     Космическо ДНК, вместо да гадае без Асцендент. Кешира се в
+     sessionStorage за календарния ден + сигнатура на наталните данни,
+     за да не пресмятаме наново при всяко влизане в таба. */
+  const DAILY_RJ_CACHE_KEY = "retrograden_daily_rj_v1";
+  function starsHTML(n){
+    return '<span class="rj-stars">' + "★".repeat(n) + '<span class="dim">' + "★".repeat(5 - n) + '</span></span>';
   }
-  function refreshUpcomingEvents(d){
-    const dateKey = d.toDateString();
-    if (upcomingCache.dateKey === dateKey){
-      renderUpcomingEvents(upcomingCache.events);
+  function refreshDailyRJ(d){
+    const card = $("dailyRjCard");
+    const list = $("dailyRjList");
+    const summaryEl = $("dailyRjSummary");
+    if (!card || !list) return;
+
+    const natal = getSavedNatalChart();
+    if (!natal || !natal.chart){
+      list.innerHTML = '<p class="rj-empty">Направи си <b>Космическо ДНК</b>, за да получаваш лични дневни индикатори — засега виждаш само общото небе.</p>';
+      summaryEl.classList.add("hidden");
+      summaryEl.textContent = "";
+      card.classList.remove("hidden");
       return;
     }
-    computeUpcomingEvents(d, (events) => {
-      upcomingCache = { dateKey, events };
-      renderUpcomingEvents(events);
-    });
+
+    const dateKey = d.toDateString();
+    const chartSig = natal.debugDate + "|" + natal.debugTime + "|" + natal.debugTown;
+    let data = null;
+    try {
+      const raw = sessionStorage.getItem(DAILY_RJ_CACHE_KEY);
+      if (raw){
+        const cached = JSON.parse(raw);
+        if (cached.dateKey === dateKey && cached.chartSig === chartSig) data = cached.data;
+      }
+    } catch(e){}
+
+    if (!data){
+      data = computeDailyRJ(natal.chart, d);
+      if (!data){ card.classList.add("hidden"); return; }
+      try { sessionStorage.setItem(DAILY_RJ_CACHE_KEY, JSON.stringify({ dateKey, chartSig, data })); } catch(e){}
+    }
+
+    list.innerHTML = data.indicators.map(ind =>
+      '<div class="rj-row"><div class="rj-main"><span class="rj-label"><span class="rj-icon">' + ind.icon + '</span>' + esc(ind.label) + '</span>' +
+      '<span class="rj-text">' + esc(ind.text) + '</span></div>' + starsHTML(ind.stars) + '</div>'
+    ).join("");
+    if (data.summary){
+      summaryEl.textContent = data.summary;
+      summaryEl.classList.remove("hidden");
+    } else {
+      summaryEl.classList.add("hidden");
+    }
+    card.classList.remove("hidden");
   }
 
   /* "Откакто последно надникна" — сравнява текущото небе с моментна
@@ -1999,7 +2351,7 @@ function nearestCity(lat, lon){
 
     renderChips(sky);
 
-    refreshUpcomingEvents(d);
+    refreshDailyRJ(d);
 
     refreshPersonalCard();
 
