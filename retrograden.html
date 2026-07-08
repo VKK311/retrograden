@@ -131,7 +131,8 @@ main{flex:1;padding:6px 16px 136px}
 /* ---------- Дашборд ---------- */
 .cosmic-msg{font-size:16.5px;line-height:1.6;margin:12px 0 4px;font-weight:500}
 .ghost-btn{
-  margin-top:12px;padding:9px 15px;border-radius:999px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;min-height:48px;
+  margin-top:12px;padding:9px 18px;border-radius:999px;cursor:pointer;
   border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04);
   color:var(--muted);font:600 12.5px var(--font-body);letter-spacing:.02em;
   transition:all .25s ease;
@@ -163,9 +164,9 @@ main{flex:1;padding:6px 16px 136px}
 }
 @keyframes shimmer{60%,100%{transform:translateX(160%)}}
 
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;justify-content:center}
 .astro-source{margin-top:12px;font-size:.72rem;letter-spacing:.02em;color:rgba(238,240,255,.4);font-style:italic}
-.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;justify-content:center}
 .btn-row .ghost-btn{margin-top:0}
 .city-line{margin-top:14px;font-size:.85rem;line-height:1.5;color:rgba(238,240,255,.75);min-height:0}
 .city-line.pending{color:rgba(238,240,255,.45);font-style:italic}
@@ -175,6 +176,19 @@ main{flex:1;padding:6px 16px 136px}
   border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.04);color:var(--muted);
 }
 .chip.hot{border-color:rgba(198,255,74,.5);color:var(--acid);box-shadow:0 0 14px rgba(198,255,74,.15)}
+
+/* ---------- Планетна таблица (Космическо ДНК · пълна карта) ---------- */
+.planet-list{margin-top:6px}
+.planet-row{
+  display:grid;grid-template-columns:1.1fr 1.4fr auto auto;column-gap:8px;align-items:center;
+  padding:9px 2px;border-bottom:1px solid var(--line);font-size:12.5px;
+}
+.planet-row:last-child{border-bottom:none}
+.planet-row.no-house{grid-template-columns:1.1fr 1.4fr auto}
+.planet-row .p-name{color:rgba(238,240,255,.86);font-weight:600}
+.planet-row .p-sign{color:var(--muted)}
+.planet-row .p-deg{color:var(--muted2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.planet-row .p-house{color:var(--muted2);text-align:right;white-space:nowrap}
 
 /* ---------- Форми ---------- */
 .f-label{
@@ -385,6 +399,7 @@ select.field option{background:#0b0d22;color:var(--text)}
 .context-options{display:flex;flex-direction:column;gap:10px;margin-top:20px}
 .context-btn{
   display:flex;align-items:center;gap:13px;padding:14px 16px;border-radius:16px;cursor:pointer;
+  min-height:48px;box-sizing:border-box;
   border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.035);color:var(--text);
   font:500 14px var(--font-body);text-align:left;transition:all .22s ease;width:100%;
 }
@@ -532,10 +547,13 @@ select.field option{background:#0b0d22;color:var(--text)}
         <div id="inviteCodeBox" class="hidden">
           <p class="invite-code" id="inviteCodeText" aria-live="polite"></p>
           <p class="invite-hint">Прати го или го диктувай. Шест знака, без философия.</p>
+          <div class="btn-row">
+            <button class="ghost-btn hidden" id="inviteCopyCodeBtn" type="button">📋 Копирай кода</button>
+            <button class="ghost-btn hidden" id="inviteShareBtn" type="button">🔗 Сподели</button>
+          </div>
         </div>
         <div class="btn-row">
-          <button class="ghost-btn" id="inviteGenBtn" type="button">✦ Генерирай покана</button>
-          <button class="ghost-btn hidden" id="inviteCopyBtn" type="button">📋 Копирай</button>
+          <button class="ghost-btn" id="inviteGenBtn" type="button">✦ Генерирай код</button>
         </div>
       </article>
 
@@ -558,7 +576,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <label class="f-label" for="compatB">Другият човек</label>
         <select class="field" id="compatB"></select>
 
-        <button class="btn-primary" id="compatBtn" type="button">Изчисли щетите ⚡</button>
+        <div class="btn-row"><button class="ghost-btn" id="compatBtn" type="button">Изчисли щетите ⚡</button></div>
       </article>
 
       <div id="compatLoading" class="glass card loading-box hidden">
@@ -624,7 +642,7 @@ select.field option{background:#0b0d22;color:var(--text)}
       <article class="glass card">
         <h2 class="card-label"><span class="dot violet"></span>Опасна зона</h2>
         <p class="rc-text" style="margin-top:11px">Изтриването маха всичко от това устройство. Космосът ще те забрави. НАП — не.</p>
-        <button class="ghost-btn" id="profileDeleteBtn" type="button" style="margin-top:12px">Изтрий локалните данни</button>
+        <div class="btn-row"><button class="ghost-btn" id="profileDeleteBtn" type="button">Изтрий локалните данни</button></div>
       </article>
     </section>
 
@@ -2137,6 +2155,13 @@ function nearestCity(lat, lon){
     const moon = chart.planets.find(p => p.name === "Moon");
     const who = data.name ? esc(data.name) : "безименната легенда";
 
+    const natalSubEl = $("natalSub");
+    if (natalSubEl){
+      natalSubEl.textContent = "Слънце в " + sun.sign.symbol + " " + sun.sign.name +
+        " · Луна в " + moon.sign.symbol + " " + moon.sign.name +
+        (canDoHouses ? " · Асцендент " + chart.ascendant.sign.symbol + " " + chart.ascendant.sign.name : "");
+    }
+
     let html = "";
     html += "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2>";
     html += "<p class=\"result-summary\">Слънце " + SIGNS[sun.signIdx].symbol + " " + sun.sign.name +
@@ -2167,8 +2192,11 @@ function nearestCity(lat, lon){
 
       html += "<article class=\"glass card reveal d3\">" +
         "<h2 class=\"card-label\"><span class=\"dot violet\"></span>Пълна карта · Whole Sign домове</h2>" +
-        "<div class=\"chips\">" + chart.planets.map(p =>
-          "<span class=\"chip\">" + p.nameBg + " · " + p.sign.symbol + " " + p.sign.name + " · Дом " + p.house + "</span>"
+        "<div class=\"planet-list\">" + chart.planets.map(p =>
+          "<div class=\"planet-row\"><span class=\"p-name\">" + p.nameBg + "</span>" +
+          "<span class=\"p-sign\">" + p.sign.symbol + " " + p.sign.name + "</span>" +
+          "<span class=\"p-deg\">" + p.degInSign.toFixed(1) + "°</span>" +
+          "<span class=\"p-house\">Дом " + p.house + "</span></div>"
         ).join("") + "</div></article>";
     } else {
       html += "<article class=\"glass card reveal d2\">" +
@@ -2180,8 +2208,10 @@ function nearestCity(lat, lon){
 
       html += "<article class=\"glass card reveal d3\">" +
         "<h2 class=\"card-label\"><span class=\"dot violet\"></span>Останалите планети</h2>" +
-        "<div class=\"chips\">" + chart.planets.filter(p=>p.name!=="Sun"&&p.name!=="Moon").map(p =>
-          "<span class=\"chip\">" + p.nameBg + " · " + p.sign.symbol + " " + p.sign.name + "</span>"
+        "<div class=\"planet-list\">" + chart.planets.filter(p=>p.name!=="Sun"&&p.name!=="Moon").map(p =>
+          "<div class=\"planet-row no-house\"><span class=\"p-name\">" + p.nameBg + "</span>" +
+          "<span class=\"p-sign\">" + p.sign.symbol + " " + p.sign.name + "</span>" +
+          "<span class=\"p-deg\">" + p.degInSign.toFixed(1) + "°</span></div>"
         ).join("") + "</div></article>";
     }
 
@@ -4295,9 +4325,22 @@ function showContextualResult(reading, comboResult){
   });
 }
 
+const INVITE_SHARE_TEMPLATES = [
+  "{name} иска да сравните карти в Ретрограден. Код {code} — шест секунди, драма гарантирана.",
+  "Ретрограден вече пресметна нещо между теб и {name}. Код {code} — сам ще видиш какво.",
+  "{name} те покани на Космическа комбинация в Ретрограден. Код {code} — приемаш или бягаш, ти избираш."
+];
+function buildInviteShareMessage(code){
+  const profile = getLocalProfile();
+  const name = profile && profile.name ? profile.name : "Някой";
+  const tpl = INVITE_SHARE_TEMPLATES[Math.floor(Math.random() * INVITE_SHARE_TEMPLATES.length)];
+  return tpl.replace(/\{name\}/g, name).replace(/\{code\}/g, code);
+}
+
 /* ---------- Свързване на екран „Сравни" ---------- */
 (function combineScreen(){
-  const genBtn = $("inviteGenBtn"), copyBtn = $("inviteCopyBtn");
+  const genBtn = $("inviteGenBtn");
+  const copyCodeBtn = $("inviteCopyCodeBtn"), shareBtn = $("inviteShareBtn");
   const codeBox = $("inviteCodeBox"), codeText = $("inviteCodeText");
   const acceptBtn = $("inviteAcceptBtn"), codeInput = $("inviteCodeInput");
   const cloudHint = $("combineCloudHint");
@@ -4313,19 +4356,33 @@ function showContextualResult(reading, comboResult){
     genBtn.textContent = "Космосът пише кода…";
     const code = await createInvite();
     genBtn.disabled = false;
-    genBtn.textContent = "✦ Генерирай покана";
+    genBtn.textContent = "✦ Генерирай код";
     if (!code) return;
     currentCode = code;
     codeText.textContent = code;
     codeBox.classList.remove("hidden");
-    copyBtn.classList.remove("hidden");
+    copyCodeBtn.classList.remove("hidden");
+    shareBtn.classList.remove("hidden");
   });
 
-  copyBtn.addEventListener("click", () => {
+  copyCodeBtn.addEventListener("click", () => {
     if (!currentCode) return;
-    const profile = getLocalProfile();
-    const msg = (profile ? profile.name : "Някой") + " те вика за Космическа комбинация. Въведи код " + currentCode + " в Ретрограден.";
     if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(currentCode).then(
+        () => toast("Кодът е копиран."),
+        () => toast("Копирането не мина — диктувай го, шест знака са.")
+      );
+    } else {
+      toast("Браузърът пази клипборда ревниво. Диктувай кода — шест знака са.");
+    }
+  });
+
+  shareBtn.addEventListener("click", () => {
+    if (!currentCode) return;
+    const msg = buildInviteShareMessage(currentCode);
+    if (navigator.share){
+      navigator.share({ text: msg }).catch(() => {});
+    } else if (navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(msg).then(
         () => toast("Копирано. Сега е техен ход."),
         () => toast("Копирането не мина — диктувай го, шест знака са.")
