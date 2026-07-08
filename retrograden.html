@@ -561,7 +561,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <h2 class="card-label"><span class="dot cyan"></span>Имаш покана?</h2>
         <label class="f-label" for="inviteCodeInput" style="margin-top:14px">Въведи кода</label>
         <input class="field code-input" id="inviteCodeInput" type="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="ABC123">
-        <button class="btn-primary" id="inviteAcceptBtn" type="button">Сравни ни →</button>
+        <button class="btn-primary" id="inviteAcceptBtn" type="button">Изчисли щетите ⚡</button>
       </article>
 
       <p class="disclaimer">✦ Космосът не гарантира съвместимост. Само забавление.</p>
@@ -576,7 +576,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <label class="f-label" for="compatB">Другият човек</label>
         <select class="field" id="compatB"></select>
 
-        <div class="btn-row"><button class="ghost-btn" id="compatBtn" type="button">Изчисли щетите ⚡</button></div>
+        <div class="btn-row"><button class="ghost-btn" id="compatBtn" type="button">Дай мнение</button></div>
       </article>
 
       <div id="compatLoading" class="glass card loading-box hidden">
@@ -4397,7 +4397,7 @@ function buildInviteShareMessage(code){
     acceptBtn.textContent = "Космосът рови в архива…";
     await acceptInvite(codeInput.value);
     acceptBtn.disabled = false;
-    acceptBtn.textContent = "Сравни ни →";
+    acceptBtn.textContent = "Изчисли щетите ⚡";
   });
 })();
 
