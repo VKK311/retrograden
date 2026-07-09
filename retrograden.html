@@ -525,7 +525,7 @@ select.field option{background:#0b0d22;color:var(--text)}
 
     <!-- ================= ЕКРАН 2: КОСМИЧЕСКО ДНК ================= -->
     <section id="screen-natal" class="screen" role="tabpanel" aria-label="Космическо ДНК">
-      <h1 class="screen-title">Космическо <span class="grad">ДНК</span></h1>
+      <h1 class="screen-title">Твоята <span class="grad">карта</span></h1>
       <p class="screen-sub" id="natalSub">Кажи кога и къде си се появил. Космосът ще изчисли, не гадае.</p>
 
       <article class="glass card" id="natalForm">
@@ -2653,7 +2653,7 @@ function nearestCity(lat, lon){
     }
 
     let html = "";
-    html += "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2>";
+    html += "<h2 class=\"result-heading\">Карта на <span class=\"grad\">" + who + "</span></h2>";
     html += "<p class=\"result-summary\">Слънце " + SIGNS[sun.signIdx].symbol + " " + sun.sign.name +
             " · Луна " + SIGNS[moon.signIdx].symbol + " " + moon.sign.name +
             (canDoHouses ? " · Асцендент " + chart.ascendant.sign.symbol + " " + chart.ascendant.sign.name : "") + "</p>";
