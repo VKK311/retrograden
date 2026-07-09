@@ -408,7 +408,7 @@ select.field option{background:#0b0d22;color:var(--text)}
   background:linear-gradient(92deg,var(--cyan),var(--acid));
   -webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 0 16px rgba(198,255,74,.35));
-  user-select:all;
+  user-select:all;cursor:pointer;transition:opacity .2s;
 }
 .invite-hint{text-align:center;font-size:12px;color:var(--muted2);margin-bottom:4px}
 .code-input{text-transform:uppercase;letter-spacing:.18em;text-align:center;font-family:var(--font-display);font-weight:600}
@@ -579,9 +579,8 @@ select.field option{background:#0b0d22;color:var(--text)}
         <p class="rc-text" style="margin-top:11px">Генерирай код и го прати на човека, чиято карта те интересува. Валиден 7 дни, еднократен — като повечето обещания.</p>
         <div id="inviteCodeBox" class="hidden">
           <p class="invite-code" id="inviteCodeText" aria-live="polite"></p>
-          <p class="invite-hint">Прати го или го диктувай. Шест знака, без философия.</p>
+          <p class="invite-hint">Чукни кода за бързо копиране. Или сподели — линкът води директно тук.</p>
           <div class="btn-row">
-            <button class="ghost-btn hidden" id="inviteCopyCodeBtn" type="button">📋 Копирай кода</button>
             <button class="ghost-btn hidden" id="inviteShareBtn" type="button">🔗 Сподели</button>
           </div>
         </div>
@@ -594,7 +593,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <h2 class="card-label"><span class="dot cyan"></span>Имаш покана?</h2>
         <label class="f-label" for="inviteCodeInput" style="margin-top:14px">Въведи кода</label>
         <input class="field code-input" id="inviteCodeInput" type="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="ABC123">
-        <button class="btn-primary" id="inviteAcceptBtn" type="button">Изчисли щетите ⚡</button>
+        <button class="btn-primary" id="inviteAcceptBtn" type="button">Сравни ни →</button>
       </article>
 
       <p class="disclaimer">✦ Космосът не гарантира съвместимост. Само забавление.</p>
@@ -4816,21 +4815,22 @@ function showContextualResult(reading, comboResult){
 }
 
 const INVITE_SHARE_TEMPLATES = [
-  "{name} иска да сравните карти в Ретрограден. Код {code} — шест секунди, драма гарантирана.",
-  "Ретрограден вече пресметна нещо между теб и {name}. Код {code} — сам ще видиш какво.",
-  "{name} те покани на Космическа комбинация в Ретрограден. Код {code} — приемаш или бягаш, ти избираш."
+  "{name} иска да сравните карти в Ретрограден. Код {code} → {link}",
+  "Ретрограден вече пресметна нещо между теб и {name}. Влез: {link} Код: {code}",
+  "Космосът има мнение за теб и {name}. Разбери го: {link} Код {code}"
 ];
 function buildInviteShareMessage(code){
   const profile = getLocalProfile();
   const name = profile && profile.name ? profile.name : "Някой";
+  const link = window.location.origin + window.location.pathname + "?c=" + code;
   const tpl = INVITE_SHARE_TEMPLATES[Math.floor(Math.random() * INVITE_SHARE_TEMPLATES.length)];
-  return tpl.replace(/\{name\}/g, name).replace(/\{code\}/g, code);
+  return tpl.replace(/\{name\}/g, name).replace(/\{code\}/g, code).replace(/\{link\}/g, link);
 }
 
 /* ---------- Свързване на екран „Сравни" ---------- */
 (function combineScreen(){
   const genBtn = $("inviteGenBtn");
-  const copyCodeBtn = $("inviteCopyCodeBtn"), shareBtn = $("inviteShareBtn");
+  const shareBtn = $("inviteShareBtn");
   const codeBox = $("inviteCodeBox"), codeText = $("inviteCodeText");
   const acceptBtn = $("inviteAcceptBtn"), codeInput = $("inviteCodeInput");
   const cloudHint = $("combineCloudHint");
@@ -4851,34 +4851,33 @@ function buildInviteShareMessage(code){
     currentCode = code;
     codeText.textContent = code;
     codeBox.classList.remove("hidden");
-    copyCodeBtn.classList.remove("hidden");
     shareBtn.classList.remove("hidden");
   });
 
-  copyCodeBtn.addEventListener("click", () => {
+  codeText.addEventListener("click", () => {
     if (!currentCode) return;
     if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(currentCode).then(
-        () => toast("Кодът е копиран."),
-        () => toast("Копирането не мина — диктувай го, шест знака са.")
-      );
-    } else {
-      toast("Браузърът пази клипборда ревниво. Диктувай кода — шест знака са.");
+      navigator.clipboard.writeText(currentCode).then(() => {
+        toast("Кодът е копиран.");
+        codeText.style.opacity = "0.5";
+        setTimeout(() => codeText.style.opacity = "1", 300);
+      });
     }
   });
 
   shareBtn.addEventListener("click", () => {
     if (!currentCode) return;
     const msg = buildInviteShareMessage(currentCode);
+    const link = window.location.origin + window.location.pathname + "?c=" + currentCode;
     if (navigator.share){
-      navigator.share({ text: msg }).catch(() => {});
+      navigator.share({ text: msg, url: link }).catch(() => {});
     } else if (navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(msg).then(
-        () => toast("Копирано. Сега е техен ход."),
-        () => toast("Копирането не мина — диктувай го, шест знака са.")
+        () => toast("Копирано. Прати го където искаш."),
+        () => toast("Копирането не мина — диктувай кода.")
       );
     } else {
-      toast("Браузърът пази клипборда ревниво. Диктувай кода — шест знака са.");
+      toast("Браузърът пази клипборда ревниво. Диктувай кода.");
     }
   });
 
@@ -4887,7 +4886,7 @@ function buildInviteShareMessage(code){
     acceptBtn.textContent = "Космосът рови в архива…";
     await acceptInvite(codeInput.value);
     acceptBtn.disabled = false;
-    acceptBtn.textContent = "Изчисли щетите ⚡";
+    acceptBtn.textContent = "Сравни ни →";
   });
 })();
 
@@ -4971,7 +4970,31 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
     if (typeof natalSyncFromStorage === "function") natalSyncFromStorage();
     if (typeof refreshPersonalCard === "function") refreshPersonalCard();
     showScreen("screen-today");
+
+    /* Дълбок линк: ако onboarding-ът е завършен заради покана (?c=XXXXXX),
+       прескочи "Днес" и заведи направо на "Сравни" с готов код. */
+    const pendingCode = sessionStorage.getItem("retrograden_pending_code");
+    if (pendingCode){
+      sessionStorage.removeItem("retrograden_pending_code");
+      showScreen("screen-combine");
+      setTimeout(() => {
+        $("inviteCodeInput").value = pendingCode;
+        $("inviteCodeInput").dispatchEvent(new Event("input"));
+      }, 300);
+    }
   });
+})();
+
+/* Дълбок линк: ?c=XXXXXX — запазваме кода (за след onboarding или за
+   съществуващ потребител в initRouter по-долу) и чистим URL-а, без да
+   презареждаме страницата. */
+(function checkDeepLink(){
+  const params = new URLSearchParams(window.location.search);
+  const code = (params.get("c") || "").trim().toUpperCase();
+  if (code && code.length === 6){
+    sessionStorage.setItem("retrograden_pending_code", code);
+    window.history.replaceState({}, "", window.location.pathname);
+  }
 })();
 
 /* ============================================================
@@ -5014,6 +5037,16 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
 
   if (!profile){
     showScreen("screen-onboarding");
+    return;
+  }
+
+  /* Дълбок линк при вече съществуващ потребител: пропускаме "Днес",
+     отиваме направо на "Сравни" с готов код вместо нормалния init. */
+  const pendingCode = sessionStorage.getItem("retrograden_pending_code");
+  if (pendingCode){
+    sessionStorage.removeItem("retrograden_pending_code");
+    showScreen("screen-combine");
+    setTimeout(() => { $("inviteCodeInput").value = pendingCode; }, 300);
     return;
   }
 
