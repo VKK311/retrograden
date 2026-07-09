@@ -210,24 +210,26 @@ select.field{
 }
 select.field option{background:#0b0d22;color:var(--text)}
 
-/* input[type=date]/[type=time]: браузърът рисува собствена икона
-   (календар/часовник) ВЪТРЕ в полето, без да я съгласува с нашия
-   padding — на много мобилни браузъри тя се сблъсква с текста или
-   изскача извън заоблената рамка. Резервираме място отдясно, както
-   select.field по-горе. НЕ нулираме -webkit-appearance тук (за
-   разлика от select) — на part от версиите на iOS Safari това чупи
-   изцяло функционалността на date/time полето, по-рисково е от
-   визуалния проблем, който оправяме. Самото преливане на ширината
-   (iOS Safari игнорира width:100% за тези контроли) се овладява от
-   overflow:hidden на .card по-горе, не тук. */
-.field[type="date"], .field[type="time"]{
-  padding-right:44px;min-height:48px;color-scheme:dark;
-  background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);
-}
-.field[type="date"]::-webkit-calendar-picker-indicator,
-.field[type="time"]::-webkit-calendar-picker-indicator{
-  filter:invert(0.9) brightness(1.3);opacity:.85;cursor:pointer;
-  padding:2px;margin-left:6px;
+/* Дата/час на раждане: input[type=date]/[type=time] замени с
+   select-и (ден/месец/година, час/минута) — нативните date/time
+   контроли имат хардкодирана вътрешна ширина на iOS Safari, която
+   никакъв CSS (min-width:0, overflow:hidden на родителя и т.н.) не
+   успя да овладее напълно. Select-ите ползват същия wheel picker UX
+   на iOS/Android, но с пълен CSS контрол върху ширината. */
+.date-row{display:flex;gap:6px}
+.date-row .ob-day{flex:0 0 68px}
+.date-row .ob-month{flex:1;min-width:0}
+.date-row .ob-year{flex:0 0 92px}
+.time-row{display:flex;align-items:center;gap:6px}
+.time-row .ob-hour{flex:1}
+.time-row .ob-minute{flex:1}
+.time-sep{font-size:18px;font-weight:600;color:var(--muted);padding:0 2px}
+/* select.field по-горе резервира 42px за стрелката и 15px позиция —
+   твърде широко за тесни ден/час/минута полета, текстът се блъска в
+   иконата. По-компактна версия само за редовете с дата/час. */
+.date-row select.field, .time-row select.field{
+  padding-left:10px;padding-right:24px;text-align:left;
+  background-position:right 8px center;background-size:11px 7px;
 }
 
 
@@ -537,11 +539,19 @@ select.field option{background:#0b0d22;color:var(--text)}
           <label class="radio-label"><input type="radio" name="natalGender" value="other"> Друго</label>
         </div>
 
-        <label class="f-label" for="natalDate">Дата на раждане</label>
-        <input class="field" id="natalDate" type="date">
+        <label class="f-label">Дата на раждане</label>
+        <div class="date-row" id="natalDateRow">
+          <select class="field ob-day" id="natalDay"></select>
+          <select class="field ob-month" id="natalMonth"></select>
+          <select class="field ob-year" id="natalYear"></select>
+        </div>
 
-        <label class="f-label" for="natalTime">Точен час на раждане</label>
-        <input class="field" id="natalTime" type="time">
+        <label class="f-label">Точен час на раждане</label>
+        <div class="time-row" id="natalTimeRow">
+          <select class="field ob-hour" id="natalHour"></select>
+          <span class="time-sep">:</span>
+          <select class="field ob-minute" id="natalMinute"></select>
+        </div>
         <label class="checkbox-row">
           <input type="checkbox" id="natalNoTime">
           <span>Не знам точния час — покажи каквото е сигурно, пропусни Асцендента</span>
@@ -627,11 +637,19 @@ select.field option{background:#0b0d22;color:var(--text)}
           <label class="radio-label"><input type="radio" name="obGender" value="other"> Друго</label>
         </div>
 
-        <label class="f-label" for="obDate">Кога се появи на Земята?</label>
-        <input class="field" id="obDate" type="date">
+        <label class="f-label">Кога се появи на Земята?</label>
+        <div class="date-row" id="obDateRow">
+          <select class="field ob-day" id="obDay"></select>
+          <select class="field ob-month" id="obMonth"></select>
+          <select class="field ob-year" id="obYear"></select>
+        </div>
 
-        <label class="f-label" for="obTime">Точен час (за Асцендента)</label>
-        <input class="field" id="obTime" type="time">
+        <label class="f-label">Точен час (за Асцендента)</label>
+        <div class="time-row" id="obTimeRow">
+          <select class="field ob-hour" id="obHour"></select>
+          <span class="time-sep">:</span>
+          <select class="field ob-minute" id="obMinute"></select>
+        </div>
         <label class="checkbox-row">
           <input type="checkbox" id="obNoTime">
           <span>Не знам часа — Космосът ще работи с каквото има</span>
@@ -977,6 +995,99 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => (
   { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[c]
 ));
+
+/* ============================================================
+   Дата/час на раждане през select-и (не input[type=date/time] —
+   виж бележката в CSS за причината). Всеки select тръгва с празна
+   плейсхолдър опция (value=""), за да пази старото поведение "нищо
+   избрано = невалидна дата" (иначе браузърът винаги показва първата
+   реална опция като "избрана" и валидацията никога не хваща
+   пропуснато поле).
+   ============================================================ */
+const MONTH_NAMES_BG = ["Януари","Февруари","Март","Април","Май","Юни",
+  "Юли","Август","Септември","Октомври","Ноември","Декември"];
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function populateDateSelects(dayId, monthId, yearId){
+  const daySel = $(dayId), monthSel = $(monthId), yearSel = $(yearId);
+  const addPlaceholder = (sel, label) => {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = label;
+    sel.appendChild(o);
+  };
+  addPlaceholder(daySel, "Ден");
+  for (let d = 1; d <= 31; d++){
+    const o = document.createElement("option");
+    o.value = String(d); o.textContent = String(d);
+    daySel.appendChild(o);
+  }
+  addPlaceholder(monthSel, "Месец");
+  MONTH_NAMES_BG.forEach((m, i) => {
+    const o = document.createElement("option");
+    o.value = String(i + 1); o.textContent = m;
+    monthSel.appendChild(o);
+  });
+  addPlaceholder(yearSel, "Година");
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear; y >= thisYear - 100; y--){
+    const o = document.createElement("option");
+    o.value = String(y); o.textContent = String(y);
+    yearSel.appendChild(o);
+  }
+}
+
+function populateTimeSelects(hourId, minuteId){
+  const hourSel = $(hourId), minSel = $(minuteId);
+  const addPlaceholder = (sel, label) => {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = label;
+    sel.appendChild(o);
+  };
+  addPlaceholder(hourSel, "Час");
+  for (let h = 0; h < 24; h++){
+    const o = document.createElement("option");
+    o.value = String(h); o.textContent = pad2(h);
+    hourSel.appendChild(o);
+  }
+  addPlaceholder(minSel, "Мин");
+  for (let m = 0; m < 60; m += 5){ /* стъпка 5 минути е достатъчна за Асцендент */
+    const o = document.createElement("option");
+    o.value = String(m); o.textContent = pad2(m);
+    minSel.appendChild(o);
+  }
+}
+
+/* "YYYY-MM-DD" (зеро-padнато, за консистентност с profile.birthDate/
+   Supabase/старите записи) или "" ако не всички три полета са избрани. */
+function readDateSelects(dayId, monthId, yearId){
+  const d = $(dayId).value, m = $(monthId).value, y = $(yearId).value;
+  if (!d || !m || !y) return "";
+  return y + "-" + pad2(m) + "-" + pad2(d);
+}
+function writeDateSelects(dayId, monthId, yearId, isoDate){
+  if (!isoDate){ $(dayId).value = ""; $(monthId).value = ""; $(yearId).value = ""; return; }
+  const [y, m, d] = isoDate.split("-").map(Number);
+  $(yearId).value = String(y);
+  $(monthId).value = String(m);
+  $(dayId).value = String(d);
+}
+
+/* "HH:MM" или "" ако не са избрани и двете. */
+function readTimeSelects(hourId, minuteId){
+  const h = $(hourId).value, m = $(minuteId).value;
+  if (h === "" || m === "") return "";
+  return pad2(h) + ":" + pad2(m);
+}
+function writeTimeSelects(hourId, minuteId, hhmm){
+  if (!hhmm){ $(hourId).value = ""; $(minuteId).value = ""; return; }
+  const [h, m] = hhmm.split(":").map(Number);
+  $(hourId).value = String(h);
+  /* минутният select е на стъпка 5 — по-стари записи (от нативния
+     time picker) може да имат произволна минута, закръгляме до
+     най-близката налична опция вместо да оставим полето празно. */
+  const snapped = Math.round(m / 5) * 5 % 60;
+  $(minuteId).value = String(snapped);
+}
 
 function hashStr(str){
   let h = 2166136261;
@@ -2465,6 +2576,8 @@ function nearestCity(lat, lon){
   const STORAGE_KEY = "retrograden_natal_v1";
   const citySel = $("natalCity");
   const cityList = $("natalCityList");
+  populateDateSelects("natalDay", "natalMonth", "natalYear");
+  populateTimeSelects("natalHour", "natalMinute");
   BULGARIA_TOWNS.forEach(t => {
     const o = document.createElement("option");
     o.value = t.label; // за дубликати (Бяла) вече включва областта
@@ -2481,10 +2594,14 @@ function nearestCity(lat, lon){
   });
 
   const noTimeBox = $("natalNoTime");
-  const timeInput = $("natalTime");
+  const natalHour = $("natalHour"), natalMinute = $("natalMinute");
+  function setNatalTimeDisabled(disabled){
+    natalHour.disabled = disabled;
+    natalMinute.disabled = disabled;
+  }
   noTimeBox.addEventListener("change", () => {
-    timeInput.disabled = noTimeBox.checked;
-    if (noTimeBox.checked) timeInput.value = "";
+    setNatalTimeDisabled(noTimeBox.checked);
+    if (noTimeBox.checked) writeTimeSelects("natalHour", "natalMinute", "");
   });
 
   function saveData(data){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){ console.warn("localStorage недостъпен:", e); } }
@@ -2495,9 +2612,9 @@ function nearestCity(lat, lon){
     const genderToCheck = document.querySelector('input[name="natalGender"][value="' + (data.gender || "") + '"]');
     document.querySelectorAll('input[name="natalGender"]').forEach(r => r.checked = false);
     if (genderToCheck) genderToCheck.checked = true;
-    $("natalDate").value = data.date || "";
-    if (data.timeKnown){ timeInput.value = data.time || ""; noTimeBox.checked = false; timeInput.disabled = false; }
-    else { timeInput.value = ""; noTimeBox.checked = true; timeInput.disabled = true; }
+    writeDateSelects("natalDay", "natalMonth", "natalYear", data.date || "");
+    if (data.timeKnown){ writeTimeSelects("natalHour", "natalMinute", data.time || ""); noTimeBox.checked = false; setNatalTimeDisabled(false); }
+    else { writeTimeSelects("natalHour", "natalMinute", ""); noTimeBox.checked = true; setNatalTimeDisabled(true); }
     citySel.value = data.cityLabel || "";
     const t = findTown(citySel.value);
     cityHint.textContent = citySel.value.trim() === "" ? ""
@@ -2603,7 +2720,7 @@ function nearestCity(lat, lon){
   }
 
   $("natalBtn").addEventListener("click", () => {
-    const dateVal = $("natalDate").value;
+    const dateVal = readDateSelects("natalDay", "natalMonth", "natalYear");
     if (!dateVal){ toast("Нужна е поне дата на раждане. Космосът смята, не гадае."); return; }
     const genderInput = document.querySelector('input[name="natalGender"]:checked');
     const data = {
@@ -2611,7 +2728,7 @@ function nearestCity(lat, lon){
       gender: genderInput ? genderInput.value : null,
       date: dateVal,
       timeKnown: !noTimeBox.checked,
-      time: noTimeBox.checked ? "" : timeInput.value,
+      time: noTimeBox.checked ? "" : readTimeSelects("natalHour", "natalMinute"),
       cityLabel: citySel.value
     };
     if (data.timeKnown && !data.time){ toast("Или въведи час, или отбележи „Не знам точния час“."); return; }
@@ -4811,7 +4928,10 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
    ============================================================ */
 (function onboarding(){
   const citySel = $("obCity"), cityList = $("obCityList"), cityHint = $("obCityHint");
-  const noTime = $("obNoTime"), timeInput = $("obTime");
+  const noTime = $("obNoTime");
+  const obHour = $("obHour"), obMinute = $("obMinute");
+  populateDateSelects("obDay", "obMonth", "obYear");
+  populateTimeSelects("obHour", "obMinute");
 
   BULGARIA_TOWNS.forEach(t => {
     const o = document.createElement("option");
@@ -4821,8 +4941,9 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
   function findTown(v){ return findTownByLabel(v); }
 
   noTime.addEventListener("change", () => {
-    timeInput.disabled = noTime.checked;
-    if (noTime.checked) timeInput.value = "";
+    obHour.disabled = noTime.checked;
+    obMinute.disabled = noTime.checked;
+    if (noTime.checked) writeTimeSelects("obHour", "obMinute", "");
   });
   citySel.addEventListener("input", () => {
     cityHint.textContent = citySel.value.trim() === "" ? ""
@@ -4833,9 +4954,9 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
     const name = $("obName").value.trim();
     const genderInput = document.querySelector('input[name="obGender"]:checked');
     const gender = genderInput ? genderInput.value : null;
-    const birthDate = $("obDate").value;
+    const birthDate = readDateSelects("obDay", "obMonth", "obYear");
     const timeKnown = !noTime.checked;
-    const birthTime = timeKnown ? timeInput.value : "";
+    const birthTime = timeKnown ? readTimeSelects("obHour", "obMinute") : "";
     const town = findTown(citySel.value);
 
     if (!name){ toast("Име трябва. Псевдоним също върши работа — Космосът не проверява лични карти."); return; }
