@@ -53,6 +53,10 @@ CREATE TABLE combinations (
   user_b_name TEXT,
   context TEXT,
   result_json JSONB NOT NULL,
+  chart_a JSONB,          -- снимка на наталните карти в момента на
+  chart_b JSONB,          -- комбинацията (за дневните индикатори на двойката)
+  is_saved BOOLEAN NOT NULL DEFAULT false,
+  saved_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -69,6 +73,7 @@ CREATE POLICY "Insert invite" ON combination_invites FOR INSERT WITH CHECK (true
 CREATE POLICY "Update invite" ON combination_invites FOR UPDATE USING (true);
 CREATE POLICY "Public read combinations" ON combinations FOR SELECT USING (true);
 CREATE POLICY "Insert combination" ON combinations FOR INSERT WITH CHECK (true);
+CREATE POLICY "Update combination" ON combinations FOR UPDATE USING (true);
 
 -- ============================================================
 -- МИГРАЦИЯ v1.7 · Пол + контекст на четенето
@@ -80,3 +85,18 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gender TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE combination_invites ADD COLUMN IF NOT EXISTS inviter_gender TEXT;
 ALTER TABLE combinations ADD COLUMN IF NOT EXISTS context TEXT;
+
+-- ============================================================
+-- МИГРАЦИЯ v1.8 · Запазени двойки + поправка на RLS
+-- Идемпотентен блок — безопасен за повторно изпълнение.
+-- ПРИЛОЖЕНА към живата база на 09.07.2026 (през Supabase MCP).
+-- ============================================================
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS is_saved BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS saved_at TIMESTAMPTZ;
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS chart_a JSONB;
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS chart_b JSONB;
+-- ПОПРАВКА: combinations нямаше UPDATE policy — update({context}) от
+-- v1.7 тихо не правеше нищо (0 засегнати реда, без грешка от RLS).
+-- Без нея и запазването/премахването на двойка нямаше да работи.
+DROP POLICY IF EXISTS "Update combination" ON combinations;
+CREATE POLICY "Update combination" ON combinations FOR UPDATE USING (true);
