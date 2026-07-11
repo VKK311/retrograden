@@ -397,12 +397,30 @@ select.field option{background:#0b0d22;color:var(--text)}
 .dna-heading{display:flex;align-items:center;gap:12px;margin:26px 2px 6px}
 .dna-heading .result-heading{margin:0}
 .dna-avatar{
-  width:44px;height:44px;border-radius:50%;flex-shrink:0;
-  display:grid;place-items:center;
-  font:700 18px var(--font-display);color:#eaffca;
-  background:linear-gradient(135deg, rgba(106,61,245,.4), rgba(198,255,74,.3));
-  border:2px solid rgba(255,255,255,.2);
+  position:relative;width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  cursor:pointer;
 }
+.dna-avatar .avatar-placeholder,.dna-avatar .avatar-img{
+  width:44px;height:44px;font-size:18px;border-width:2px;
+}
+/* Малка иконка-камера долу-вдясно, за да е ясно че аватарът е кликаем */
+.dna-avatar::after{
+  content:"📷";position:absolute;right:-3px;bottom:-3px;
+  width:18px;height:18px;border-radius:50%;font-size:10px;line-height:18px;
+  text-align:center;background:var(--midnight);border:1px solid var(--line);
+}
+.dna-avatar.has-photo::after{content:"✎"}
+.avatar-remove-btn{
+  position:absolute;right:-6px;top:-6px;width:20px;height:20px;border-radius:50%;
+  cursor:pointer;font-size:10px;line-height:1;padding:0;z-index:2;
+  color:#ff5a7a;background:var(--midnight);border:1px solid rgba(255,90,122,.5);
+}
+.avatar-remove-btn:hover{background:rgba(255,90,122,.15)}
+.avatar-img{border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,.18);display:block}
+.dna-avatar .avatar-img{border:2px solid rgba(255,255,255,.2)}
+.avatar-fade{animation:avatarPop .35s cubic-bezier(.22,.9,.3,1)}
+@keyframes avatarPop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){ .avatar-fade{animation:none} }
 /* Връзки · списък с двойки */
 .pair-profile-item{
   display:flex;align-items:center;gap:12px;padding:11px 2px;
@@ -623,6 +641,7 @@ select.field option{background:#0b0d22;color:var(--text)}
         <button class="btn-primary" id="natalBtn" type="button">Изчисли картата ✦</button>
       </article>
 
+      <input type="file" id="avatarFileInput" accept="image/*" class="hidden" aria-hidden="true">
       <div id="natalResult" class="hidden"></div>
       <button class="ghost-btn hidden" id="natalEditBtn" type="button" style="margin-top:14px">✎ Редактирай данните</button>
 
@@ -3963,8 +3982,12 @@ function nearestCity(lat, lon){
     }
 
     let html = "";
-    const dnaInitial = data.name ? esc(data.name.trim().charAt(0).toUpperCase()) : "⊕";
-    html += "<div class=\"dna-heading\"><span class=\"dna-avatar\">" + dnaInitial + "</span>" +
+    const avatarData = getLocalAvatar();
+    html += "<div class=\"dna-heading\">" +
+      "<span class=\"dna-avatar" + (avatarData ? " has-photo" : "") + "\" id=\"dnaAvatar\" role=\"button\" tabindex=\"0\" aria-label=\"Смени снимката\" title=\"Тапни за снимка\">" +
+      renderAvatar(data.name, avatarData, 44) +
+      (avatarData ? "<button class=\"avatar-remove-btn\" id=\"dnaAvatarRemove\" type=\"button\" title=\"Премахни снимката\" aria-label=\"Премахни снимката\">✕</button>" : "") +
+      "</span>" +
       "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2></div>";
     html += "<p class=\"result-summary\">Слънце " + SIGNS[sun.signIdx].symbol + " " + sun.sign.name +
             " · Луна " + SIGNS[moon.signIdx].symbol + " " + moon.sign.name +
@@ -4072,6 +4095,87 @@ function nearestCity(lat, lon){
     const d = loadData();
     if (d){ fillForm(d); renderChart(d); }
   };
+})();
+
+/* ============================================================
+   v1.10 · АВАТАР — качване, resize, премахване
+   Снимката се смалява до квадрат ~100px (център-кроп) и се пази
+   като Base64 JPEG (0.7) в localStorage + Supabase. Аватарът в „ДНК"
+   се пре-рендерира при всяка промяна (natalSyncFromStorage).
+   ============================================================ */
+const AVATAR_MAX_PX = 100;
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024; /* 5MB преди resize */
+
+function resizeImage(file, maxSize, callback){
+  const reader = new FileReader();
+  reader.onerror = () => callback(null);
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onerror = () => callback(null);
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const size = Math.min(img.width, img.height, maxSize);
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const sx = (img.width - size) / 2, sy = (img.height - size) / 2;
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+        callback(canvas.toDataURL("image/jpeg", 0.7));
+      } catch(err){ callback(null); }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+(function avatarUpload(){
+  const fileInput = $("avatarFileInput");
+  const natalResult = $("natalResult");
+  if (!fileInput || !natalResult) return;
+
+  function rerender(){ if (typeof natalSyncFromStorage === "function") natalSyncFromStorage(); }
+
+  function persistAvatar(dataUrl){
+    setLocalAvatar(dataUrl);
+    const profile = getLocalProfile();
+    if (profile){
+      profile.updatedAt = new Date().toISOString();
+      saveLocalProfile(profile);
+      syncProfileToCloud(profile); /* включва avatar (виж syncProfileToCloud) */
+    }
+    rerender();
+    if (typeof renderProfilePairs === "function") renderProfilePairs();
+  }
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = ""; /* позволи повторен избор на същия файл */
+    if (!file) return;
+    if (!/^image\//.test(file.type)){ toast("Космосът приема само снимки, не документи."); return; }
+    if (file.size > AVATAR_MAX_BYTES){ toast("Снимката е над 5MB. Космосът е голям, но не чак толкова."); return; }
+    resizeImage(file, AVATAR_MAX_PX, (dataUrl) => {
+      if (!dataUrl){ toast("Космосът отказа снимката. Пробвай друга."); return; }
+      persistAvatar(dataUrl);
+      toast("Снимката е в Космоса.");
+    });
+  });
+
+  /* Делегирано — #dnaAvatar се пресъздава при всеки renderChart */
+  natalResult.addEventListener("click", (e) => {
+    if (e.target.closest("#dnaAvatarRemove")){
+      e.stopPropagation();
+      if (!confirm("Премахни снимката? Космосът пак ще ползва първата буква от името ти.")) return;
+      persistAvatar(null);
+      toast("Снимката е премахната.");
+      return;
+    }
+    if (e.target.closest("#dnaAvatar")) fileInput.click();
+  });
+  natalResult.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.id === "dnaAvatar"){
+      e.preventDefault(); fileInput.click();
+    }
+  });
 })();
 
 /* ============================================================
@@ -4211,6 +4315,29 @@ function nearestCity(lat, lon){
    ============================================================ */
 const PROFILE_KEY = "retrograden_profile_v1";
 const NATAL_KEY = "retrograden_natal_v1"; /* същият ключ ползва екран „Космическо ДНК" */
+const AVATAR_KEY = "retrograden_avatar_v1"; /* Base64 data URL или липсва */
+
+function getLocalAvatar(){
+  try { return localStorage.getItem(AVATAR_KEY) || null; } catch(e){ return null; }
+}
+function setLocalAvatar(dataUrl){
+  try {
+    if (dataUrl) localStorage.setItem(AVATAR_KEY, dataUrl);
+    else localStorage.removeItem(AVATAR_KEY);
+  } catch(e){ console.warn("localStorage недостъпен (аватар):", e); }
+}
+
+/* Един източник на истина за кръглия аватар — снимка ако има, иначе
+   първа буква от името (или ⊕ при липса на име). Ползва се и в „ДНК"
+   (44px), и в списъка с двойки в „Връзки" (36px). */
+function renderAvatar(name, avatarData, size){
+  if (avatarData){
+    return '<img class="avatar-img" src="' + esc(avatarData) + '" alt="' + esc(name || "аватар") +
+      '" style="width:' + size + 'px;height:' + size + 'px">';
+  }
+  const initial = name && name.trim() ? esc(name.trim().charAt(0).toUpperCase()) : "⊕";
+  return '<div class="avatar-placeholder" style="width:' + size + 'px;height:' + size + 'px">' + initial + '</div>';
+}
 
 function getLocalProfile(){
   try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; }
@@ -4238,6 +4365,7 @@ async function syncProfileToCloud(profile){
       birth_lat: profile.lat,
       birth_lon: profile.lon,
       natal_chart: profile.chart,
+      avatar: getLocalAvatar(),
       updated_at: new Date().toISOString()
     });
   } catch(e){ console.warn("Supabase sync не мина:", e); }
@@ -4327,16 +4455,21 @@ function renderProfilePairs(){
   if (!section || !list) return;
   const pairs = getSavedPairsCache();
   if (!pairs.length){ section.classList.add("hidden"); return; }
+  /* В запазена двойка единият винаги си ти — показваме твоята снимка
+     на твоята страна (мач по име), партньорът остава с първа буква,
+     докато нямаме неговата снимка. */
+  const myProfile = getLocalProfile();
+  const myName = myProfile && myProfile.name ? myProfile.name.trim() : null;
+  const myAvatar = getLocalAvatar();
+  const avatarFor = (name) => (myName && name && name.trim() === myName) ? myAvatar : null;
   list.innerHTML = pairs.map(pair => {
-    const initialA = (pair.nameA || "?").trim().charAt(0).toUpperCase() || "?";
-    const initialB = (pair.nameB || "?").trim().charAt(0).toUpperCase() || "?";
     const since = pair.savedAt
       ? new Date(pair.savedAt).toLocaleDateString("bg-BG", { day:"numeric", month:"long", year:"numeric" })
       : "неизвестно кога";
     return '<div class="pair-profile-item" data-pair-id="' + esc(String(pair.id)) + '">' +
-      '<div class="pair-avatars"><div class="avatar-placeholder">' + esc(initialA) + '</div>' +
+      '<div class="pair-avatars">' + renderAvatar(pair.nameA, avatarFor(pair.nameA), 36) +
       '<div class="avatar-connector"></div>' +
-      '<div class="avatar-placeholder">' + esc(initialB) + '</div></div>' +
+      renderAvatar(pair.nameB, avatarFor(pair.nameB), 36) + '</div>' +
       '<div class="pair-profile-info">' +
       '<span class="pair-profile-name">' + esc(pair.nameA) + ' & ' + esc(pair.nameB) + '</span>' +
       '<span class="pair-profile-context">' + esc(PAIR_CONTEXT_LABELS[pair.context] || "Двойка") + '</span>' +
@@ -4383,6 +4516,7 @@ function renderProfilePairs(){
       localStorage.removeItem(PROFILE_KEY);
       localStorage.removeItem(NATAL_KEY);
       localStorage.removeItem(SAVED_PAIRS_KEY);
+      localStorage.removeItem(AVATAR_KEY);
     } catch(e){}
     location.reload();
   });
@@ -6450,6 +6584,10 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
       city: cloud.birth_city, lat: Number(cloud.birth_lat), lon: Number(cloud.birth_lon),
       chart: cloud.natal_chart, updatedAt: cloud.updated_at
     });
+    /* Аватарът е отделен localStorage ключ — възстановяваме и него от
+       облака, когато той пази по-нов профил (напр. друго устройство). */
+    if (cloud.avatar) setLocalAvatar(cloud.avatar);
+    if (typeof renderProfileDossier === "function") renderProfileDossier();
   });
 })();
 </script>

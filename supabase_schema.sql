@@ -26,6 +26,7 @@ CREATE TABLE profiles (
   birth_lat NUMERIC(9,6) NOT NULL,
   birth_lon NUMERIC(9,6) NOT NULL,
   natal_chart JSONB,
+  avatar TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -100,3 +101,10 @@ ALTER TABLE combinations ADD COLUMN IF NOT EXISTS chart_b JSONB;
 -- Без нея и запазването/премахването на двойка нямаше да работи.
 DROP POLICY IF EXISTS "Update combination" ON combinations;
 CREATE POLICY "Update combination" ON combinations FOR UPDATE USING (true);
+
+-- ============================================================
+-- МИГРАЦИЯ v1.10 · Аватар (снимка на потребителя)
+-- Съхранява се като Base64 data URL (~100px JPEG, качество 0.7).
+-- Идемпотентен блок — безопасен за повторно изпълнение.
+-- ============================================================
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar TEXT;
