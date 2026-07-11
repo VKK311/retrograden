@@ -393,7 +393,17 @@ select.field option{background:#0b0d22;color:var(--text)}
   background:linear-gradient(90deg,var(--cyan),var(--acid));
   transition:width .8s cubic-bezier(.22,.9,.25,1);
 }
-/* Профил · списък с двойки */
+/* ДНК · аватар до заглавието на картата */
+.dna-heading{display:flex;align-items:center;gap:12px;margin:26px 2px 6px}
+.dna-heading .result-heading{margin:0}
+.dna-avatar{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  display:grid;place-items:center;
+  font:700 18px var(--font-display);color:#eaffca;
+  background:linear-gradient(135deg, rgba(106,61,245,.4), rgba(198,255,74,.3));
+  border:2px solid rgba(255,255,255,.2);
+}
+/* Връзки · списък с двойки */
 .pair-profile-item{
   display:flex;align-items:center;gap:12px;padding:11px 2px;
   border-bottom:1px solid var(--line);cursor:pointer;transition:background .2s;
@@ -570,10 +580,6 @@ select.field option{background:#0b0d22;color:var(--text)}
         <p class="astro-source" id="personalDebug" style="opacity:.6"></p>
       </article>
 
-      <section id="dailyPairsSection" class="hidden" aria-label="Запазени двойки">
-        <h2 class="section-heading">Запазени <span class="grad">двойки</span></h2>
-        <div id="dailyPairsList"></div>
-      </section>
     </section>
 
     <!-- ================= ЕКРАН 2: КОСМИЧЕСКО ДНК ================= -->
@@ -619,6 +625,19 @@ select.field option{background:#0b0d22;color:var(--text)}
 
       <div id="natalResult" class="hidden"></div>
       <button class="ghost-btn hidden" id="natalEditBtn" type="button" style="margin-top:14px">✎ Редактирай данните</button>
+
+      <article class="glass card hidden" id="profileDossier" style="margin-top:18px">
+        <h2 class="card-label"><span class="dot cyan"></span>Космическо досие</h2>
+        <div id="profileInfo" style="margin-top:8px"></div>
+        <div class="btn-row">
+          <button class="ghost-btn" id="profileSyncBtn" type="button">↻ Синхронизирай с Космоса</button>
+        </div>
+        <p class="field-hint" id="profileSyncStatus"></p>
+      </article>
+
+      <div style="margin-top:24px; text-align:center">
+        <button class="ghost-btn" id="profileDeleteBtn" type="button" style="font-size:12px; color:var(--muted2)">Изтрий данните</button>
+      </div>
     </section>
 
     <!-- ================= ЕКРАН 3: СРАВНИ (Космическа комбинация + бърза зодия) ================= -->
@@ -717,32 +736,28 @@ select.field option{background:#0b0d22;color:var(--text)}
       <p class="foot" style="padding-bottom:24px">✦ Данните живеят на телефона ти. Космосът е виждал по-лоши тайни.</p>
     </section>
 
-    <!-- ================= ЕКРАН 5: ПРОФИЛ ================= -->
-    <section id="screen-profile" class="screen" role="tabpanel" aria-label="Профил">
-      <h1 class="screen-title">Космическо <span class="grad">досие</span></h1>
-      <p class="screen-sub">Данните, по които Космосът те разпознава.</p>
+    <!-- ================= ЕКРАН 5: ВРЪЗКИ ================= -->
+    <section id="screen-pairs" class="screen" role="tabpanel" aria-label="Връзки">
+      <h1 class="screen-title">Космически <span class="grad">връзки</span></h1>
+      <p class="screen-sub">Двойките, които Космосът наблюдава. Ежедневно и без милост.</p>
 
-      <article class="glass card">
-        <div id="profileInfo"></div>
-        <div class="btn-row">
-          <button class="ghost-btn" id="profileEditBtn" type="button">✎ Редактирай данните</button>
-          <button class="ghost-btn" id="profileSyncBtn" type="button">↻ Синхронизирай с Космоса</button>
-        </div>
-        <p class="field-hint" id="profileSyncStatus"></p>
-      </article>
+      <div class="empty-state hidden" id="pairsEmptyState">
+        <article class="glass card" style="text-align:center">
+          <p class="rc-text" style="color:var(--muted)">Все още нямаш запазени двойки.<br>Сравни се с някого и запази връзката.</p>
+          <div class="btn-row"><button class="ghost-btn" id="pairsEmptyCompareBtn" type="button">⊕ Към Сравни</button></div>
+        </article>
+      </div>
 
-      <section id="profilePairsSection" class="hidden" aria-label="Космически двойки">
+      <section id="dailyPairsSection" class="hidden" aria-label="Дневни двойки">
+        <div id="dailyPairsList"></div>
+      </section>
+
+      <section id="profilePairsSection" class="hidden" aria-label="Управление на двойките">
         <article class="glass card">
-          <h2 class="card-label"><span class="dot"></span>Космически двойки</h2>
+          <h2 class="card-label"><span class="dot"></span>Управление на двойките</h2>
           <div id="profilePairsList"></div>
         </article>
       </section>
-
-      <article class="glass card">
-        <h2 class="card-label"><span class="dot violet"></span>Опасна зона</h2>
-        <p class="rc-text" style="margin-top:11px">Изтриването маха всичко от това устройство. Космосът ще те забрави. НАП — не.</p>
-        <div class="btn-row"><button class="ghost-btn" id="profileDeleteBtn" type="button">Изтрий локалните данни</button></div>
-      </article>
     </section>
 
     <!-- ================= ЕКРАН 6: РЕЗУЛТАТ ОТ КОМБИНАЦИЯ ================= -->
@@ -767,9 +782,9 @@ select.field option{background:#0b0d22;color:var(--text)}
 
 <nav class="tabbar glass" aria-label="Основна навигация" role="tablist">
   <button class="tab active" data-target="screen-today" type="button" role="tab" aria-selected="true"><span class="t-ico" aria-hidden="true">✦</span>Днес</button>
+  <button class="tab" data-target="screen-pairs" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">☉</span>Връзки</button>
+  <button class="tab" data-target="screen-combine" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">⊕</span>Сравни</button>
   <button class="tab" data-target="screen-natal" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">☉</span>ДНК</button>
-  <button class="tab" data-target="screen-combine" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">⇄</span>Сравни</button>
-  <button class="tab" data-target="screen-profile" type="button" role="tab" aria-selected="false"><span class="t-ico" aria-hidden="true">◎</span>Профил</button>
 </nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1269,7 +1284,8 @@ function showScreen(id){
   const bar = document.querySelector(".tabbar");
   if (bar) bar.classList.toggle("hidden", id === "screen-onboarding");
   if (id === "screen-today" && typeof refreshPersonalCard === "function") refreshPersonalCard();
-  if (id === "screen-profile" && typeof renderProfileScreen === "function") renderProfileScreen();
+  if (id === "screen-natal" && typeof renderProfileDossier === "function") renderProfileDossier();
+  if (id === "screen-pairs" && typeof loadPairsScreen === "function") loadPairsScreen();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 document.querySelectorAll(".tab").forEach((btn) => {
@@ -3068,7 +3084,7 @@ async function removeSavedPair(pairId){
   }
 }
 
-/* ---------- Рендер: секция „Запазени двойки" в „Днес" ---------- */
+/* ---------- Рендер: екран „Връзки" ---------- */
 function renderPairIndicatorsHTML(indicators){
   return '<div class="pair-indicators">' + PAIR_INDICATOR_PLANETS.map(meta =>
     '<div class="indicator-row"><span class="ind-label">' + meta.label + '</span>' +
@@ -3101,6 +3117,21 @@ function renderDailyPairs(d, sky){
       '</article>';
   }).join("");
   section.classList.remove("hidden");
+}
+
+/* Екран „Връзки": дневните карти + списъкът за управление + празно
+   състояние. Вика се от showScreen при всяко влизане в таба; кешът
+   се рендерира веднага, облакът опреснява тихо след това. */
+function loadPairsScreen(){
+  const renderAll = () => {
+    const d = new Date();
+    renderDailyPairs(d, computeSky(d));
+    renderProfilePairs();
+    const empty = $("pairsEmptyState");
+    if (empty) empty.classList.toggle("hidden", getSavedPairsCache().length > 0);
+  };
+  renderAll();
+  fetchSavedPairs().then(pairs => { if (pairs) renderAll(); });
 }
 
 function renderChips(sky){
@@ -3766,23 +3797,11 @@ function nearestCity(lat, lon){
 
     refreshPersonalCard();
 
-    renderDailyPairs(d, sky);
-
     lastComputedDateStr = d.toDateString();
   }
 
   renderForDate(new Date());
   showWhatChanged(lastSky, score);
-
-  /* Опресняване на запазените двойки от облака — веднъж на зареждане,
-     отложено след пълното парсване на скрипта (getLocalProfile ползва
-     const-и, декларирани по-долу във файла). Локалният кеш вече е
-     рендериран синхронно от renderForDate по-горе. */
-  setTimeout(() => {
-    fetchSavedPairs().then(pairs => {
-      if (pairs) renderDailyPairs(currentRenderDate || new Date(), lastSky);
-    });
-  }, 0);
 
   $("nextMsgBtn").addEventListener("click", () => {
     msgEl.classList.add("out");
@@ -3944,7 +3963,9 @@ function nearestCity(lat, lon){
     }
 
     let html = "";
-    html += "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2>";
+    const dnaInitial = data.name ? esc(data.name.trim().charAt(0).toUpperCase()) : "⊕";
+    html += "<div class=\"dna-heading\"><span class=\"dna-avatar\">" + dnaInitial + "</span>" +
+      "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2></div>";
     html += "<p class=\"result-summary\">Слънце " + SIGNS[sun.signIdx].symbol + " " + sun.sign.name +
             " · Луна " + SIGNS[moon.signIdx].symbol + " " + moon.sign.name +
             (canDoHouses ? " · Асцендент " + chart.ascendant.sign.symbol + " " + chart.ascendant.sign.name : "") + "</p>";
@@ -4028,6 +4049,8 @@ function nearestCity(lat, lon){
     /* Мост към профила (v1.5): наталните данни са една истина навсякъде */
     if (typeof updateProfileFromNatalData === "function") updateProfileFromNatalData(data);
     if (typeof refreshPersonalCard === "function") refreshPersonalCard();
+    /* Досието живее на същия екран — опресни го веднага след редакция */
+    if (typeof renderProfileDossier === "function") renderProfileDossier();
   });
 
   $("natalEditBtn").addEventListener("click", () => {
@@ -4274,39 +4297,30 @@ function updateProfileFromNatalData(data){
 }
 
 /* ============================================================
-   v1.5 · ПРОФИЛ ЕКРАН
+   v1.9 · ДОСИЕ В ЕКРАН „ДНК" (бившият Профил екран е разпръснат:
+   досие+синхронизация тук, двойките — в екран „Връзки")
    ============================================================ */
-function renderProfileScreen(){
+function renderProfileDossier(){
+  const card = $("profileDossier");
   const box = $("profileInfo");
+  if (!card || !box) return;
   const profile = getLocalProfile();
-  if (!profile){
-    box.innerHTML = '<p class="rc-text">Няма профил на това устройство. Космосът не те познава — още.</p>';
-    $("profileSyncStatus").textContent = "";
-    return;
-  }
-  const chart = profile.chart;
-  const sun = chart && chart.planets ? chart.planets.find(p => p.name === "Sun") : null;
-  const moon = chart && chart.planets ? chart.planets.find(p => p.name === "Moon") : null;
+  if (!profile){ card.classList.add("hidden"); return; }
   const rows = [
-    ["Име", esc(profile.name)],
     ["Роден", esc(profile.birthDate) + (profile.timeKnown && profile.birthTime ? " в " + esc(profile.birthTime) : " · час неизвестен")],
-    ["Град", esc(profile.city)],
-    sun ? ["Слънце", sun.sign.symbol + " " + sun.sign.name] : null,
-    moon ? ["Луна", moon.sign.symbol + " " + moon.sign.name] : null,
-    (chart && chart.ascendant && profile.timeKnown) ? ["Асцендент", chart.ascendant.sign.symbol + " " + chart.ascendant.sign.name] : null
-  ].filter(Boolean);
+    ["Град", esc(profile.city)]
+  ];
   box.innerHTML = rows.map(r =>
     '<div class="profile-row"><span class="pr-k">' + r[0] + '</span><span class="pr-v">' + r[1] + '</span></div>'
   ).join("");
   $("profileSyncStatus").textContent = supabaseClient
     ? "Облачен архив: включен. Космосът пази копие."
     : "Облачен архив: изключен (Supabase не е настроен). Всичко живее само тук.";
-
-  renderProfilePairs();
+  card.classList.remove("hidden");
 }
 
-/* Списък „Космически двойки" в Профил — от локалния кеш (той е
-   първичен; облачното опресняване става при зареждане на „Днес"). */
+/* Списък за управление на двойките в екран „Връзки" — от локалния
+   кеш (той е първичен; облачното опресняване е в loadPairsScreen). */
 function renderProfilePairs(){
   const section = $("profilePairsSection");
   const list = $("profilePairsList");
@@ -4332,9 +4346,10 @@ function renderProfilePairs(){
   section.classList.remove("hidden");
 }
 
-(function profileScreen(){
-  /* Космически двойки: премахване + клик за дневната шега (делегирано
-     веднъж — списъкът се пре-рендерира при всяко влизане в екрана) */
+(function pairsAndDossierScreen(){
+  /* Управление на двойките: премахване + клик за скрол до дневната
+     карта (делегирано веднъж — списъкът се пре-рендерира при всяко
+     влизане в екрана) */
   $("profilePairsList").addEventListener("click", async (e) => {
     const item = e.target.closest(".pair-profile-item");
     if (!item) return;
@@ -4343,22 +4358,19 @@ function renderProfilePairs(){
       if (!confirm("Космосът ще забрави тази двойка. Сигурен ли си?")) return;
       await removeSavedPair(pairId);
       renderProfilePairs();
+      const empty = $("pairsEmptyState");
+      if (empty) empty.classList.toggle("hidden", getSavedPairsCache().length > 0);
+      renderDailyPairs(new Date(), computeSky(new Date()));
       toast("Двойката е забравена. Космосът е дискретен, историята — не.");
       return;
     }
-    /* клик върху самата двойка → „Днес" с фокус върху нейната карта */
-    showScreen("screen-today");
-    setTimeout(() => {
-      const card = document.querySelector('.pair-daily-card[data-pair-id="' + pairId.replace(/"/g, '') + '"]');
-      if (card) card.scrollIntoView({ behavior:"smooth", block:"center" });
-    }, 350);
+    /* клик върху двойката → скрол до дневната ѝ карта (същия екран) */
+    const card = document.querySelector('.pair-daily-card[data-pair-id="' + pairId.replace(/"/g, '') + '"]');
+    if (card) card.scrollIntoView({ behavior:"smooth", block:"center" });
   });
 
-  $("profileEditBtn").addEventListener("click", () => {
-    showScreen("screen-natal");
-    const editBtn = $("natalEditBtn");
-    if (editBtn && !editBtn.classList.contains("hidden")) editBtn.click();
-  });
+  $("pairsEmptyCompareBtn").addEventListener("click", () => showScreen("screen-combine"));
+
   $("profileSyncBtn").addEventListener("click", () => {
     const profile = getLocalProfile();
     if (!profile){ toast("Няма какво да синхронизираме. Първо профил."); return; }
