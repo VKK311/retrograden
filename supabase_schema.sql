@@ -58,6 +58,9 @@ CREATE TABLE combinations (
   chart_b JSONB,          -- комбинацията (за дневните индикатори на двойката)
   is_saved BOOLEAN NOT NULL DEFAULT false,
   saved_at TIMESTAMPTZ,
+  inviter_gender TEXT,
+  invitee_gender TEXT,
+  relationship_detail TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -108,3 +111,17 @@ CREATE POLICY "Update combination" ON combinations FOR UPDATE USING (true);
 -- Идемпотентен блок — безопасен за повторно изпълнение.
 -- ============================================================
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar TEXT;
+
+-- ============================================================
+-- МИГРАЦИЯ v1.11 · Семейни връзки + родова корекция
+-- inviter_gender/invitee_gender: полът на двамата в комбинацията,
+-- записан в момента на приемане на поканата (за родовата корекция
+-- на текстовете спрямо читателя — viewerGender).
+-- relationship_detail: под-тип на роднинската връзка ("mother",
+-- "father", "brother", "sister", "child", "grandparent", "kum",
+-- "other") — попълва се само когато context е "family", иначе NULL.
+-- Идемпотентен блок — безопасен за повторно изпълнение.
+-- ============================================================
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS inviter_gender TEXT;
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS invitee_gender TEXT;
+ALTER TABLE combinations ADD COLUMN IF NOT EXISTS relationship_detail TEXT;
