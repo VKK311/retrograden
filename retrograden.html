@@ -414,6 +414,19 @@ select.field option{background:#0b0d22;color:var(--text)}
 .pair-mood-verdict{font-style:italic;margin-top:6px!important;color:var(--text)!important}
 .pair-blacklist-block ul{padding-left:18px;margin:4px 0}
 .pair-blacklist-block li{font-size:13px;line-height:1.5;margin:4px 0;color:rgba(238,240,255,.85)}
+
+/* v1.13 · Рожден ден: златен акцент, съобразен с тъмната тема —
+   забележим, без конфети и без да крещи. */
+.pair-daily-card.birthday-today{
+  border-color:rgba(255,214,90,.55);
+  box-shadow:0 0 22px rgba(255,214,90,.14), inset 0 0 18px rgba(255,214,90,.05);
+}
+.pair-daily-card.birthday-soon{border-left:2px solid rgba(255,214,90,.4)}
+.birthday-badge{font-size:15px;margin-right:2px}
+.pair-birthday-tag{
+  font-size:10.5px;font-weight:600;letter-spacing:.04em;
+  color:rgba(255,214,90,.95);margin-top:2px;
+}
 /* ДНК · аватар до заглавието на картата */
 .dna-heading{display:flex;align-items:center;gap:12px;margin:26px 2px 6px}
 .dna-heading .result-heading{margin:0}
@@ -4047,6 +4060,273 @@ function otherPersonInPair(pair, myProfile){
 }
 
 /* ============================================================
+   v1.13 · РОЖДЕН ДЕН В КОСМИЧЕСКА ВРЪЗКА
+   Детекция: календарна дата (не Solar Return — съзнателно решение:
+   потребителите празнуват календарния ден; слънчевото завръщане
+   може да е ±1 ден от него и би объркало повече, отколкото радва).
+   Източник на датата: pair.birthDateA/B ("YYYY-MM-DD", записва се
+   при запазване на нови двойки, когато е известна) с fallback към
+   chart.utcDate — наличен във ВСЯКА карта (и в старите двойки, и в
+   облачните редове), затова НЯМА нужда от SQL миграция и стари
+   двойки работят веднага. utcDate е UTC моментът на раждане —
+   конвертираме обратно към местна българска дата през Intl (родените
+   00:00–03:00 ч. локално иначе биха получили предишния ден).
+   ============================================================ */
+const BIRTHDAY_WINDOW = 3; /* ±3 дни: 3 преди (подготовка), денят, 3 след (махмурлук) */
+
+function sofiaDateOfUTC(utcDate){
+  try {
+    const d = utcDate instanceof Date ? utcDate : new Date(utcDate);
+    if (isNaN(d.getTime())) return null;
+    return new Intl.DateTimeFormat("en-CA", { timeZone:"Europe/Sofia", year:"numeric", month:"2-digit", day:"2-digit" }).format(d);
+  } catch(e){ return null; }
+}
+
+function pairBirthDate(explicitDate, chart){
+  if (explicitDate && /^\d{4}-\d{2}-\d{2}$/.test(explicitDate)) return explicitDate;
+  if (chart && chart.utcDate) return sofiaDateOfUTC(chart.utcDate);
+  return null;
+}
+
+/* Разлика в дни между date и НАЙ-БЛИЗКОТО годишно повторение на
+   рождената дата (MM-DD). Положително = минал, отрицателно =
+   предстои. 29 февруари се празнува на 28-и в невисокосни години. */
+function daysFromBirthday(birthDateStr, date){
+  const [ , bm, bd ] = birthDateStr.split("-").map(Number);
+  const candidates = [];
+  for (let y = date.getFullYear() - 1; y <= date.getFullYear() + 1; y++){
+    let m = bm, dd = bd;
+    if (m === 2 && dd === 29){
+      const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+      if (!isLeap) dd = 28;
+    }
+    candidates.push(new Date(y, m - 1, dd));
+  }
+  const dayMs = 86400000;
+  const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  let best = null;
+  candidates.forEach(c => {
+    const diff = Math.round((today - c) / dayMs);
+    if (best === null || Math.abs(diff) < Math.abs(best)) best = diff;
+  });
+  return best;
+}
+
+/* Виж заглавния коментар за семантиката. Връща null или
+   { who:"A"|"B", days, name } / { who:"both", days:0, nameA, nameB }. */
+function detectBirthday(pair, date){
+  if (!pair) return null;
+  const d = date || new Date();
+  const bdA = pairBirthDate(pair.birthDateA, pair.chartA);
+  const bdB = pairBirthDate(pair.birthDateB, pair.chartB);
+  const inWindow = [];
+  if (bdA){
+    const days = daysFromBirthday(bdA, d);
+    if (Math.abs(days) <= BIRTHDAY_WINDOW) inWindow.push({ who:"A", days, name: pair.nameA });
+  }
+  if (bdB){
+    const days = daysFromBirthday(bdB, d);
+    if (Math.abs(days) <= BIRTHDAY_WINDOW) inWindow.push({ who:"B", days, name: pair.nameB });
+  }
+  if (!inWindow.length) return null;
+  if (inWindow.length === 2 && inWindow[0].days === 0 && inWindow[1].days === 0){
+    return { who:"both", days:0, nameA: pair.nameA, nameB: pair.nameB };
+  }
+  inWindow.sort((a, b) => Math.abs(a.days) - Math.abs(b.days));
+  return inWindow[0];
+}
+
+/* Текстови банки. Структурно решение: слотовете НЕ се разделят на
+   A/B (както в първоначалната спецификация) — {name}/{otherName}
+   плейсхолдърите правят един шаблон валиден и за двамата, а
+   детерминираният избор (seed = дата+име) така или иначе дава
+   различен текст за различни рожденици. "both" е един слот (не по
+   контекст) — двама с рожден ден в един и същи ден е твърде рядко,
+   за да оправдае 24 текста. Родово неутрални: само {name}-обръщения. */
+const BIRTHDAY_TEMPLATES = {
+  today: {
+    crush: [
+      "Днес {name} прави поредната си обиколка около Слънцето. Ти още умуваш дали да пишеш — е, Космосът рядко дава по-удобен повод от този. „Честит рожден ден“ не е признание, но е начало.",
+      "{name} има рожден ден, а ти имаш легитимен повод да се появиш в чата без стратегия. Използвай го — {sign} рядко забравя кой се е сетил.",
+      "Слънцето се върна точно там, откъдето {name} започна. Съвпадение е, че и ти си наоколо точно тази година? Космосът казва: не съвсем.",
+      "Рожден ден на {name}. Едно съобщение днес тежи колкото десет през останалата година — математика, която Космосът е проверил лично.",
+      "Днес е денят на {name}. Няма по-нисък праг за първа крачка от „честито“ — дори ти не можеш да го анализираш до смърт. Пробвай.",
+      "{name} празнува обиколка около Слънцето, а ти получаваш безплатен повод за разговор, доставен от самата небесна механика. Отказът се брои за инат."
+    ],
+    couple: [
+      "Днес {name} прави обиколка около Слънцето — точно както всяка година, но този път ти си наблизо. Космосът отбелязва: това не е случайност. А ако е — поне е добре калкулирана.",
+      "Рожден ден на {name}. Подаръкът е важен, но присъствието е по-важен — а ти вече си тук. Половината работа е свършена, не проваляй другата половина.",
+      "Слънцето на {name} се прибра у дома си за годишната равносметка. Твоята задача е по-проста: торта, внимание и нула коментари за възрастта.",
+      "{name} има рожден ден, а ти имаш договорно задължение да го направиш хубав. Космосът е проверил дребния шрифт — няма измъкване, има торта.",
+      "Днес небето празнува {name} — а небето рядко празнува когото и да е. Присъедини се, то е по-голямо от теб и има по-добра памет.",
+      "Годишният отчет на {name} пред Слънцето е днес. Резултатът: една обиколка, изпълнена в срок, с теб на борда. Космосът одобрява екипажа."
+    ],
+    friends: [
+      "{name} има рожден ден и Слънцето му е точно там, откъдето тръгна. Ти си наоколо от доста обиколки насам — Космосът не избира приятели, но ако избираше, днес би посочил теб.",
+      "Днес е денят на {name}. Приятелството не иска много: едно обаждане, една шега за възрастта и готовност да слушаш същата история от миналата година. Отново.",
+      "Рожден ден на {name} — official повод за среща, който дори най-заетият календар уважава. Космосът вече е отбелязал: без „ще се видим тия дни“ днес.",
+      "Слънцето се върна на позицията от раждането на {name}. Традицията повелява: ти носиш шегите, {name} носи тортата, никой не брои свещичките на глас.",
+      "{name} затваря поредна орбита днес. Като приятел, твоята роля е проста и древна: присъствие, висок тост и дискретност за случката от миналото лято.",
+      "Днес {name} става с една обиколка по-мъдър. Или поне с една обиколка по-стар — мъдростта Космосът я доставя отделно, с променлив срок."
+    ],
+    ex: [
+      "Днес {name} има рожден ден. Космосът ти напомня: не пращай. Не. Пращай. Каквото и да решиш обаче, Космосът вече знае резултата и не е изненадан.",
+      "Рожден ден на {name}. Едно „честито“ е учтивост, две изречения са носталгия, три са покана за драма. Космосът препоръчва да броиш внимателно.",
+      "Слънцето на {name} се завъртя пълен кръг — за поредна година, вече без теб в орбитата. Може да отбележиш факта тихо. Може и на глас, но тихо е по-безопасно.",
+      "{name} празнува днес. Ако мислиш да пишеш — Космосът не забранява, само отбелязва, че миналата година същата идея завърши с тридневен вътрешен дебат.",
+      "Днес е рожденият ден на {name}. Спомените са позволени, съобщенията в полунощ — не. Космосът е категоричен по втората точка.",
+      "Рожден ден на {name} — денят, в който блокираните чувства проверяват дали вратата е заключена. Космосът държи ключа и няма да ти го даде."
+    ],
+    work: [
+      "Днес {name} има рожден ден — official повод за торта в офиса и неофициален повод да разбереш колко всъщност я бива колегиалната ви връзка. Космосът наблюдава кой се сеща без напомняне от календара.",
+      "Рожден ден на {name}. Едно искрено „честито“ струва нула лева и се помни до следващото самооценяване. Инвестиция с най-добрата възвръщаемост в сградата.",
+      "Слънцето на {name} затвори годишния си отчет — без нито едно закъснение, за разлика от тримесечния. Отбележи го: тортата в кухнята не се яде сама.",
+      "{name} празнува днес. Правилото на офиса е просто: картичка, подпис от всички и никакви въпроси за годините. Космосът е добавил: и без имейл „по случая“ до целия отдел.",
+      "Днес е денят на {name} — единственият дедлайн тази година, който дойде точно навреме. Уважи го подобаващо.",
+      "Рожден ден на {name} в работен ден: Космосът предлага кафе от теб, усмивка от него и мълчаливо споразумение срещата в 16:00 да е кратка."
+    ],
+    family: [
+      "Днес {name} има рожден ден. Космосът би обяснил надълго за Слънцето, домовете и родовата енергия, но реалността е по-проста и по-стара от астрологията: обади се.",
+      "Рожден ден на {name} — от онези дати, които семейството помни и без телефон, защото са били празнувани с торта, роднини и поне един спор кой да духа свещичките пръв.",
+      "Слънцето на {name} се прибра в изходна позиция. Семейният протокол е ясен от поколения: обаждане преди обяд, пожелание с добра дума и никакво „ще мина другата седмица“.",
+      "{name} затваря поредна обиколка около Слънцето днес. В това семейство рождените дни не се пропускат — пропуска се само истината за възрастта, по взаимно съгласие.",
+      "Днес е денят на {name}. Космосът напомня старото правило: роднина, който се сеща за рождения ти ден без Facebook, се брои двойно.",
+      "Рожден ден на {name} — денят, в който дори старите семейни теми си взимат почивка. Едно топло пожелание днес струва повече от три услуги през годината."
+    ]
+  },
+  both: [
+    "Днес и {nameA}, и {nameB} правят обиколка около Слънцето — едновременно. Това не е просто съвпадение, това е космическа синхронизация от порядък, който дори Ретрограден уважава. Празнувайте двойно, делете тортата поравно.",
+    "Два рождени дни, една дата: {nameA} и {nameB} са се родили под едно и също Слънце, с години разлика или без. Космосът рядко прави такива дублети — отбележете го подобаващо.",
+    "{nameA} и {nameB} празнуват в един и същи ден. Статистически рядко, астрологично впечатляващо, логистично неудобно — една торта или две? Космосът гласува за две.",
+    "Днес Слънцето се върна в изходна позиция и за {nameA}, и за {nameB} — двоен годишен отчет, приет без забележки. Небето не прави това често. Възползвайте се."
+  ],
+  before: {
+    crush: [
+      "Между другото: {name} има рожден ден {when}. Космосът подсказва, че „сетих се за теб“ звучи най-добре, когато наистина си се сетил навреме. Сега е навреме.",
+      "{name} празнува {when}. Имаш време да измислиш нещо — не идеалното нещо, просто нещо. Идеалното е капан, в който crush-овете умират.",
+      "Рожденият ден на {name} наближава ({when}). Едно предварително планирано „спонтанно“ пожелание е напълно легитимна стратегия. Космосът няма да каже на никого.",
+      "Космосът отбелязва в полето: {when} е рожденият ден на {name}. Каквото и да планираш, планирай го сега — в деня опашката от честитки е дълга."
+    ],
+    couple: [
+      "Напомняне от небето: {name} има рожден ден {when}. Планът трябва да е готов. Не в последния момент. Не и тази година.",
+      "{name} празнува {when} — а „не искам нищо специално“ е изречение-капан, проверено от поколения. Космосът съветва: приготви нещо специално.",
+      "Рожденият ден на {name} е {when}. Резервацията, подаръкът, тортата — избери поне две от три. Космосът брои.",
+      "До рождения ден на {name} остава малко ({when}). Разликата между „сетих се“ и „сетих се навреме“ е точно една година коментари."
+    ],
+    friends: [
+      "{name} има рожден ден {when}. Груповият чат вече тлее с планове — не бъди човекът, който пише „аз ще потвърдя по-късно“.",
+      "Рожденият ден на {name} наближава ({when}). Подаръкът може да е символичен, присъствието — не. Космосът знае кой е дошъл миналата година.",
+      "Космическо напомняне: {when} е денят на {name}. Времето за „нещо да измислим“ изтича — измислете го.",
+      "{name} празнува {when}. Приятелските задължения са прости: явяване, тост и поне една история, която {name} би предпочел да забравиш. Не я забравяй."
+    ],
+    ex: [
+      "За протокола: {name} има рожден ден {when}. Космосът го отбелязва информативно, не като покана за действие. Разграничението е важно.",
+      "{when} е рожденият ден на {name}. Имаш няколко дни да реши какво ще правиш — или по-точно, да се убедиш да не правиш нищо. И двете са легитимни.",
+      "Рожденият ден на {name} наближава ({when}). Космосът напомня: подготвеното съобщение и изпратеното съобщение са две различни решения. Първото е безплатно.",
+      "Небето отбелязва: {name} празнува {when}. Ти отбележи каквото прецениш — за предпочитане наум."
+    ],
+    work: [
+      "Служебно напомняне от Космоса: {name} има рожден ден {when}. Картичката се подписва предварително, не в асансьора пет минути преди тортата.",
+      "{name} празнува {when}. Ако колектирате пари за подарък — сега е моментът, не когато празникът е почнал и всички гледат в теб.",
+      "Рожденият ден на {name} е {when}. Кратка подготовка: една обща картичка, едно кафе-обещание, нула въпроси за възрастта.",
+      "Космосът отбелязва в служебния календар: {when} — {name}. Сещането навреме е половината от репутацията в офиса."
+    ],
+    family: [
+      "Семейният календар и Космосът са единодушни: {name} има рожден ден {when}. Обаждането се планира сега, не се импровизира в деня.",
+      "{name} празнува {when}. В това семейство закъснялото пожелание се помни по-дълго от навременния подарък — прецени приоритетите.",
+      "Рожденият ден на {name} наближава ({when}). Космосът подсказва: попитай дискретно какво му трябва, вместо да гадаеш и да купиш пак същото като миналата година.",
+      "Небето напомня: {when} е денят на {name}. Роднинската класация „кой се сети пръв“ се отваря в 00:01. Позициите не са без значение."
+    ]
+  },
+  after: {
+    crush: [
+      "{name} имаше рожден ден {when}. Ако си пропуснал — закъснялото „честито“ е по-добро от никакво, стига да дойде с чар, а не с оправдание.",
+      "Рожденият ден на {name} мина ({when}). Пропусна повода, но не и възможността — „как мина празникът“ е легитимен втори шанс. Космосът го разрешава еднократно.",
+      "{when} {name} завъртя поредната обиколка. Ако си се сетил навреме — точка за теб. Ако не — Космосът предлага дискретна amnesty: следващият повод е по-близо, отколкото мислиш.",
+      "Празникът на {name} беше {when}. Махмурлукът (буквален или емоционален) е отличен момент за леко съобщение без претенции. Не го отбелязвай като стратегия."
+    ],
+    couple: [
+      "Рожденият ден на {name} беше {when}. Надяваме се Космосът да е бил по-щедър от теб с подаръка. Ако не е — още не е късно за поправителен жест.",
+      "{when} {name} празнува. Днес е денят на равносметката: какво мина добре, какво ще се разказва с години и кой изяде последното парче торта. Космосът знае, но мълчи.",
+      "Празникът на {name} отмина ({when}), остатъците от тортата — също. Остава посланието: вниманието не е еднодневен ангажимент. Космосът просто напомня.",
+      "{name} затвори обиколката си {when}. Следващата започна веднага — както и твоите 365 дни да измислиш по-добър подарък от тазгодишния."
+    ],
+    friends: [
+      "Рожденият ден на {name} беше {when}. Ако си бил там — браво. Ако не — дългът се изплаща с една почерпка и искрено изслушване на преразказа.",
+      "{when} {name} празнува, а груповият чат още не се е възстановил. Космосът архивира доказателствата с професионална дискретност.",
+      "Празникът на {name} мина ({when}). Традицията повелява поне седмица преразкази — твоята роля е да се смееш на правилните места.",
+      "{name} отпразнува поредната си обиколка {when}. Снимките вече циркулират. Космосът съветва: одобри само тези, на които и двамата изглеждате добре."
+    ],
+    ex: [
+      "Рожденият ден на {name} мина {when}. Ако не си писал — правилно. Ако си писал — е, вече е история, Космосът не преиграва минали епизоди.",
+      "{when} {name} имаше рожден ден. Прозорецът за спонтанни носталгични жестове официално се затвори. Космосът заключва и прибира ключа до догодина.",
+      "Празникът на {name} отмина ({when}). Каквото е било решено или неизпратено — остава си така. Небето одобрява приключените теми.",
+      "{name} празнува {when}, ти оцеля без инциденти. Космосът отбелязва зрелостта — или добре скрития вътрешен дебат. И двете се броят."
+    ],
+    work: [
+      "Рожденият ден на {name} беше {when}. Ако си пропуснал тортата — тя така или иначе свърши за 11 минути. Едно закъсняло „честито“ на кафе машината още върши работа.",
+      "{when} {name} празнува в офиса. Останаха: една недовършена торта в хладилника и колективното чувство, че срещата след празника беше излишна.",
+      "Празникът на {name} мина ({when}). Закъснялото пожелание в служебен контекст е напълно приемливо — за разлика от закъснелия отчет.",
+      "{name} отпразнува рожден ден {when}. Космосът отчита кой се сети сам и кой разбра от календарното известие. И двете се приемат, само едното се помни."
+    ],
+    family: [
+      "Рожденият ден на {name} беше {when}. Ако обаждането се е случило — семейната чест е спасена. Ако не — Космосът препоръчва да звъннеш днес, преди темата да стигне до общата трапеза.",
+      "{when} {name} празнува. Закъснялото роднинско пожелание е цял жанр — идва с извинение, завършва с дълъг разговор и накрая никой не помни закъснението.",
+      "Празникът на {name} мина ({when}). В семейството нищо не се забравя, но всичко се прощава — при явяване с уважение и, по възможност, с нещо сладко.",
+      "{name} отпразнува поредната обиколка {when}. Семейната хроника вече е записала кой е звъннал пръв. Има време класацията да се поправи до догодина."
+    ]
+  }
+};
+
+/* "{when}" за proximity текстовете: "утре"/"след 2 дни"/"вчера"/"преди 3 дни" */
+function birthdayWhenWord(days){
+  if (days === -1) return "утре";
+  if (days < 0) return "след " + (-days) + " дни";
+  if (days === 1) return "вчера";
+  return "преди " + days + " дни";
+}
+
+function fillBirthdayTemplate(tpl, birthday, pair){
+  const name = birthday.who === "B" ? pair.nameB : pair.nameA;
+  const otherName = birthday.who === "B" ? pair.nameA : pair.nameB;
+  const chart = birthday.who === "B" ? pair.chartB : pair.chartA;
+  const sunSign = chart && chart.planets ? (chart.planets.find(p => p.name === "Sun") || {}).sign : null;
+  return tpl
+    .replace(/\{name\}/g, name)
+    .replace(/\{otherName\}/g, otherName)
+    .replace(/\{nameA\}/g, pair.nameA)
+    .replace(/\{nameB\}/g, pair.nameB)
+    .replace(/\{sign\}/g, sunSign ? sunSign.name : "знака си")
+    .replace(/\{when\}/g, birthdayWhenWord(birthday.days));
+}
+
+/* Пълно съобщение за ДЕНЯ (замества стандартното). sky се приема
+   за съвместимост с бъдещи космически добавки (ретрограден Меркурий
+   коментар и т.н.), засега не се ползва. */
+function getBirthdayMessage(birthday, context, pair, sky, date){
+  const d = date || new Date();
+  let pool;
+  if (birthday.who === "both"){
+    pool = BIRTHDAY_TEMPLATES.both;
+  } else {
+    pool = BIRTHDAY_TEMPLATES.today[context] || BIRTHDAY_TEMPLATES.today.couple;
+  }
+  const seed = isoOf(d) + "_bd_" + (birthday.name || pair.nameA + pair.nameB);
+  const tpl = pool[hashDate(seed) % pool.length];
+  return fillBirthdayTemplate(tpl, birthday, pair);
+}
+
+/* Proximity модификатор — ДОПЪЛВА стандартното съобщение. */
+function addBirthdayProximityModifier(message, birthday, context, pair, date){
+  const d = date || new Date();
+  const dir = birthday.days < 0 ? "before" : "after";
+  const pool = BIRTHDAY_TEMPLATES[dir][context] || BIRTHDAY_TEMPLATES[dir].couple;
+  const seed = isoOf(d) + "_bdprox_" + birthday.name;
+  const tpl = pool[hashDate(seed) % pool.length];
+  return message + " " + fillBirthdayTemplate(tpl, birthday, pair);
+}
+
+/* ============================================================
    v1.11 · "Какво да му/ѝ напишеш днес" — съвет за подхода към
    ДРУГИЯ, базиран на неговата/нейната карта + днешните транзити,
    структуриран по relationship_detail. mother/father/brother/sister
@@ -4347,19 +4627,42 @@ function renderDailyPairs(d, sky){
   const myProfile = getLocalProfile();
   const myGender = myProfile ? myProfile.gender : null;
 
-  list.innerHTML = pairs.map(pair => {
+  /* Рожденици първи: денят > прозорецът > останалите (без да мутираме кеша) */
+  const sortedPairs = pairs.slice().sort((a, b) => {
+    const rank = p => {
+      const bd = detectBirthday(p, d);
+      if (bd && bd.days === 0) return 0;
+      if (bd) return 1;
+      return 2;
+    };
+    return rank(a) - rank(b);
+  });
+
+  list.innerHTML = sortedPairs.map(pair => {
     const indicators = computePairDailyIndicators(pair.chartA, pair.chartB, d);
-    let message;
-    if (indicators){
+    const birthday = detectBirthday(pair, d);
+    let message, birthdayClass = "";
+    if (birthday && birthday.days === 0){
+      /* Рожден ден ДНЕС: специалното копие замества стандартното */
+      message = applyGender(getBirthdayMessage(birthday, pair.context, pair, sky, d), myGender);
+      birthdayClass = " birthday-today";
+    } else if (indicators){
       const { strong, weak } = getStrongWeak(indicators);
       message = applyGender(addSpecialModifiers(
         getDailyMessage(strong, weak, pair.context, pair.nameA, pair.nameB, d), sky, d), myGender);
+      if (birthday){
+        /* В прозореца (±3 дни): стандартното + proximity модификатор */
+        message = addBirthdayProximityModifier(message, birthday, pair.context, pair, d);
+        birthdayClass = " birthday-soon";
+      }
     } else {
       message = "Едната карта не се чете — Космосът отказва да гадае за тази двойка.";
     }
     const other = otherPersonInPair(pair, myProfile);
-    return '<article class="glass card pair-daily-card" data-pair-id="' + esc(String(pair.id)) + '">' +
-      '<div class="pair-header"><span class="pair-name">' + esc(pair.nameA) + ' <span class="grad">&amp;</span> ' + esc(pair.nameB) + '</span>' +
+    return '<article class="glass card pair-daily-card' + birthdayClass + '" data-pair-id="' + esc(String(pair.id)) + '">' +
+      '<div class="pair-header"><span class="pair-name">' +
+      (birthday && birthday.days === 0 ? '<span class="birthday-badge" title="Рожден ден">🎂</span> ' : '') +
+      esc(pair.nameA) + ' <span class="grad">&amp;</span> ' + esc(pair.nameB) + '</span>' +
       '<span class="pair-context-badge">' + esc(PAIR_CONTEXT_LABELS[pair.context] || "Двойка") + '</span></div>' +
       '<p class="pair-daily-message">' + esc(message) + '</p>' +
       renderPairIndicatorsHTML(indicators) +
@@ -5767,10 +6070,12 @@ function renderProfilePairs(){
   const myName = myProfile && myProfile.name ? myProfile.name.trim() : null;
   const myAvatar = getLocalAvatar();
   const avatarFor = (name) => (myName && name && name.trim() === myName) ? myAvatar : null;
+  const today = new Date();
   list.innerHTML = pairs.map(pair => {
     const since = pair.savedAt
       ? new Date(pair.savedAt).toLocaleDateString("bg-BG", { day:"numeric", month:"long", year:"numeric" })
       : "неизвестно кога";
+    const birthday = detectBirthday(pair, today);
     return '<div class="pair-profile-item" data-pair-id="' + esc(String(pair.id)) + '">' +
       '<div class="pair-avatars">' + renderAvatar(pair.nameA, avatarFor(pair.nameA), 44) +
       '<div class="avatar-connector"></div>' +
@@ -5778,7 +6083,9 @@ function renderProfilePairs(){
       '<div class="pair-profile-info">' +
       '<span class="pair-profile-name">' + esc(pair.nameA) + ' & ' + esc(pair.nameB) + '</span>' +
       '<span class="pair-profile-context">' + esc(PAIR_CONTEXT_LABELS[pair.context] || "Двойка") + '</span>' +
-      '<span class="pair-profile-since">От ' + esc(since) + '</span></div>' +
+      '<span class="pair-profile-since">От ' + esc(since) + '</span>' +
+      (birthday && birthday.days === 0 ? '<span class="pair-birthday-tag">🎂 Рожден ден!</span>' : '') +
+      '</div>' +
       '<button class="pair-remove-btn" type="button" title="Премахни двойката" aria-label="Премахни двойката">✕</button></div>';
   }).join("");
   section.classList.remove("hidden");
@@ -7423,8 +7730,11 @@ async function acceptInvite(rawCode){
     if (data) combinationRowId = data.id;
   } catch(e){}
 
-  const profileA = { id: invite.inviter_id, name: invite.inviter_name, gender: invite.inviter_gender || null, chart: invite.inviter_chart };
-  const profileB = { id: profile.id, name: profile.name, gender: profile.gender || null, chart: profile.chart };
+  /* birthDate: за B (локалният приемащ) е известна точно; за A идва
+     по-късно от chart-а (pairBirthDate fallback) — поканата не носи
+     дата и не добавяме нови колони заради това (виж v1.13 коментара). */
+  const profileA = { id: invite.inviter_id, name: invite.inviter_name, gender: invite.inviter_gender || null, chart: invite.inviter_chart, birthDate: null };
+  const profileB = { id: profile.id, name: profile.name, gender: profile.gender || null, chart: profile.chart, birthDate: profile.birthDate || null };
   showContextQuestion(result, profileA, profileB, combinationRowId);
 }
 
@@ -7539,7 +7849,8 @@ async function finalizeContextualResult(combo, context, relationshipDetail){
   showContextualResult(reading, comboResult, {
     combinationRowId, context, relationshipDetail: relationshipDetail || null,
     chartA: profileA.chart, chartB: profileB.chart,
-    genderA: profileA.gender || null, genderB: profileB.gender || null
+    genderA: profileA.gender || null, genderB: profileB.gender || null,
+    birthDateA: profileA.birthDate || null, birthDateB: profileB.birthDate || null
   });
 }
 
@@ -7585,6 +7896,7 @@ function showContextualResult(reading, comboResult, pairMeta){
         nameA, nameB,
         chartA: pairMeta.chartA, chartB: pairMeta.chartB,
         genderA: pairMeta.genderA || null, genderB: pairMeta.genderB || null,
+        birthDateA: pairMeta.birthDateA || null, birthDateB: pairMeta.birthDateB || null,
         context: pairMeta.context || "couple",
         relationshipDetail: pairMeta.relationshipDetail || null,
         savedAt: new Date().toISOString()
