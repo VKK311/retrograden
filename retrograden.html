@@ -458,6 +458,27 @@ select.field option{background:#0b0d22;color:var(--text)}
 @keyframes avatarPop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){ .avatar-fade{animation:none} }
 
+/* v1.15 · Космически ореол на ДНК аватара със снимка — фино въртящ
+   се градиентен пръстен, изключен при reduced-motion. */
+.dna-avatar.has-photo::before{
+  content:"";position:absolute;inset:-4px;border-radius:50%;z-index:-1;
+  background:conic-gradient(from 0deg, rgba(92,225,255,.55), rgba(198,255,74,.4), rgba(155,110,255,.5), rgba(92,225,255,.55));
+  filter:blur(4px);opacity:.7;
+  animation:haloSpin 9s linear infinite;
+}
+@keyframes haloSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ .dna-avatar.has-photo::before{animation:none} }
+
+/* v1.15 · Зодиакален плейсхолдър (символ вместо буква) + мини аватари
+   в дневната карта на двойката */
+.avatar-zodiac{color:#cfe6ff;background:linear-gradient(135deg, rgba(155,110,255,.28), rgba(92,225,255,.24))}
+.pair-mini-avatars{display:inline-flex;align-items:center;vertical-align:middle;margin-right:2px}
+.pair-mini-avatars .avatar-img,.pair-mini-avatars .avatar-placeholder{
+  width:26px;height:26px;font-size:12px;border-width:1px;
+}
+.pair-mini-avatars > *:nth-child(2){margin-left:-8px}
+.pair-mini-avatars .avatar-img{position:relative;z-index:1}
+
 /* Crop UI · пълноекранно центриране на аватара */
 .crop-overlay{
   position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
@@ -4138,11 +4159,34 @@ async function fetchSavedPairs(){
       .filter(row => row.chart_a && row.chart_b) /* стари редове без снимки на картите не могат да смятат индикатори */
       .map(row => ({
         id: row.id, nameA: row.user_a_name || "А", nameB: row.user_b_name || "Б",
+        idA: row.user_a_id || null, idB: row.user_b_id || null,
         chartA: row.chart_a, chartB: row.chart_b,
         genderA: row.inviter_gender || null, genderB: row.invitee_gender || null,
         context: row.context || "couple", relationshipDetail: row.relationship_detail || null,
         savedAt: row.saved_at
       }));
+
+    /* v1.15 · Партньорски снимки: аватарите на ДВАМАТА живеят в
+       profiles.avatar (пише се от syncProfileToCloud на всяко
+       устройство) — една заявка ги закача към двойките, така че
+       партньорът вижда твоята снимка, не сива буква. Дефанзивно:
+       при отказ (стар мок, мрежа) продължаваме без аватари. */
+    try {
+      const ids = [...new Set(cloudPairs.flatMap(p => [p.idA, p.idB]).filter(Boolean))];
+      if (ids.length){
+        const { data: profRows } = await supabaseClient.from("profiles")
+          .select("id, avatar").in("id", ids);
+        if (profRows && profRows.length){
+          const avatarById = {};
+          profRows.forEach(r => { if (r.avatar) avatarById[r.id] = r.avatar; });
+          cloudPairs.forEach(p => {
+            p.avatarA = avatarById[p.idA] || null;
+            p.avatarB = avatarById[p.idB] || null;
+          });
+        }
+      }
+    } catch(e){}
+
     const localOnly = getSavedPairsCache().filter(p => String(p.id).startsWith("local_"));
     const merged = cloudPairs.concat(localOnly);
     saveSavedPairsCache(merged);
@@ -4772,8 +4816,17 @@ function renderDailyPairs(d, sky){
       message = "Едната карта не се чете — Космосът отказва да гадае за тази двойка.";
     }
     const other = otherPersonInPair(pair, myProfile);
+    /* v1.15: малки аватари и в дневната карта — облачна снимка ако има,
+       иначе моята локална при мач по име, иначе зодиен символ. */
+    const myAv = getLocalAvatar();
+    const avOf = (name, cloudAv) => cloudAv ||
+      ((myProfile && myProfile.name && name === myProfile.name) ? myAv : null);
     return '<article class="glass card pair-daily-card' + birthdayClass + '" data-pair-id="' + esc(String(pair.id)) + '">' +
       '<div class="pair-header"><span class="pair-name">' +
+      '<span class="pair-mini-avatars">' +
+      renderAvatar(pair.nameA, avOf(pair.nameA, pair.avatarA), 26, sunSymbolOf(pair.chartA)) +
+      renderAvatar(pair.nameB, avOf(pair.nameB, pair.avatarB), 26, sunSymbolOf(pair.chartB)) +
+      '</span> ' +
       (birthday && birthday.days === 0 ? '<span class="birthday-badge" title="Рожден ден">🎂</span> ' : '') +
       esc(pair.nameA) + ' <span class="grad">&amp;</span> ' + esc(pair.nameB) + '</span>' +
       '<span class="pair-context-badge">' + esc(PAIR_CONTEXT_LABELS[pair.context] || "Двойка") + '</span></div>' +
@@ -5727,7 +5780,7 @@ function nearestCity(lat, lon){
     const avatarData = getLocalAvatar();
     html += "<div class=\"dna-heading\">" +
       "<span class=\"dna-avatar" + (avatarData ? " has-photo" : "") + "\" id=\"dnaAvatar\" role=\"button\" tabindex=\"0\" aria-label=\"Смени снимката\" title=\"Тапни за снимка\">" +
-      renderAvatar(data.name, avatarData, 56) +
+      renderAvatar(data.name, avatarData, 56, sunSymbolOf(chart)) +
       (avatarData ? "<button class=\"avatar-remove-btn\" id=\"dnaAvatarRemove\" type=\"button\" title=\"Премахни снимката\" aria-label=\"Премахни снимката\">✕</button>" : "") +
       "</span>" +
       "<h2 class=\"result-heading\">Космическото ДНК на <span class=\"grad\">" + who + "</span></h2></div>";
@@ -6130,16 +6183,26 @@ function setLocalAvatar(dataUrl){
   } catch(e){ console.warn("localStorage недостъпен (аватар):", e); }
 }
 
-/* Един източник на истина за кръглия аватар — снимка ако има, иначе
-   първа буква от името (или ⊕ при липса на име). Ползва се и в „ДНК"
-   (44px), и в списъка с двойки в „Връзки" (36px). */
-function renderAvatar(name, avatarData, size){
+/* Един източник на истина за кръглия аватар — снимка ако има; иначе
+   зодиакален символ (v1.15 — по-космично от сива буква), когато
+   подателят знае слънчевия знак; иначе първа буква от името (или ⊕).
+   signSymbol е по избор — старите извиквания без него работят както преди. */
+function renderAvatar(name, avatarData, size, signSymbol){
   if (avatarData){
     return '<img class="avatar-img" src="' + esc(avatarData) + '" alt="' + esc(name || "аватар") +
       '" style="width:' + size + 'px;height:' + size + 'px">';
   }
+  if (signSymbol){
+    return '<div class="avatar-placeholder avatar-zodiac" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.46) + 'px" title="' + esc(name || "") + '">' + esc(signSymbol) + '</div>';
+  }
   const initial = name && name.trim() ? esc(name.trim().charAt(0).toUpperCase()) : "⊕";
   return '<div class="avatar-placeholder" style="width:' + size + 'px;height:' + size + 'px">' + initial + '</div>';
+}
+
+/* Слънчев знак символ от карта — за зодиакалните плейсхолдъри. */
+function sunSymbolOf(chart){
+  const sun = chart && chart.planets ? chart.planets.find(p => p.name === "Sun") : null;
+  return sun && sun.sign ? sun.sign.symbol : null;
 }
 
 function getLocalProfile(){
@@ -6258,13 +6321,15 @@ function renderProfilePairs(){
   if (!section || !list) return;
   const pairs = getSavedPairsCache();
   if (!pairs.length){ section.classList.add("hidden"); return; }
-  /* В запазена двойка единият винаги си ти — показваме твоята снимка
-     на твоята страна (мач по име), партньорът остава с първа буква,
-     докато нямаме неговата снимка. */
+  /* v1.15: приоритет на снимките — (1) облачната снимка на съответната
+     страна (pair.avatarA/B, дърпани от profiles при fetchSavedPairs —
+     така виждаш и снимката на ПАРТНЬОРА), (2) локалната ти снимка при
+     мач по име, (3) зодиакален символ от картата, (4) първа буква. */
   const myProfile = getLocalProfile();
   const myName = myProfile && myProfile.name ? myProfile.name.trim() : null;
   const myAvatar = getLocalAvatar();
-  const avatarFor = (name) => (myName && name && name.trim() === myName) ? myAvatar : null;
+  const avatarFor = (name, cloudAvatar) =>
+    cloudAvatar || ((myName && name && name.trim() === myName) ? myAvatar : null);
   const today = new Date();
   list.innerHTML = pairs.map(pair => {
     const since = pair.savedAt
@@ -6272,9 +6337,9 @@ function renderProfilePairs(){
       : "неизвестно кога";
     const birthday = detectBirthday(pair, today);
     return '<div class="pair-profile-item" data-pair-id="' + esc(String(pair.id)) + '">' +
-      '<div class="pair-avatars">' + renderAvatar(pair.nameA, avatarFor(pair.nameA), 44) +
+      '<div class="pair-avatars">' + renderAvatar(pair.nameA, avatarFor(pair.nameA, pair.avatarA), 44, sunSymbolOf(pair.chartA)) +
       '<div class="avatar-connector"></div>' +
-      renderAvatar(pair.nameB, avatarFor(pair.nameB), 44) + '</div>' +
+      renderAvatar(pair.nameB, avatarFor(pair.nameB, pair.avatarB), 44, sunSymbolOf(pair.chartB)) + '</div>' +
       '<div class="pair-profile-info">' +
       '<span class="pair-profile-name">' + esc(pair.nameA) + ' & ' + esc(pair.nameB) + '</span>' +
       '<span class="pair-profile-context">' + esc(PAIR_CONTEXT_LABELS[pair.context] || "Двойка") + '</span>' +
@@ -8084,20 +8149,31 @@ async function acceptInvite(rawCode){
      въпроса (виж finalizeContextualResult), за да пазим reading-а в
      Supabase с реалния избран контекст, не преди да е известен. */
   let combinationRowId = null;
+  const baseRow = {
+    user_a_id: invite.inviter_id,
+    user_b_id: profile.id,
+    user_a_name: invite.inviter_name,
+    user_b_name: profile.name,
+    result_json: result,
+    /* снимка на двете карти в момента на комбинацията — нужна за
+       дневните индикатори на запазена двойка (и от двете устройства) */
+    chart_a: invite.inviter_chart,
+    chart_b: profile.chart
+  };
   try {
-    const { data } = await supabaseClient.from("combinations").insert({
-      user_a_id: invite.inviter_id,
-      user_b_id: profile.id,
-      user_a_name: invite.inviter_name,
-      user_b_name: profile.name,
-      result_json: result,
-      /* снимка на двете карти в момента на комбинацията — нужна за
-         дневните индикатори на запазена двойка (и от двете устройства) */
-      chart_a: invite.inviter_chart,
-      chart_b: profile.chart,
-      inviter_gender: invite.inviter_gender || null,
-      invitee_gender: profile.gender || null
-    }).select("id").single();
+    /* v1.15: миграцията v1.11 (inviter_gender/invitee_gender) може още
+       да не е приложена към живата база — PostgREST отхвърля insert с
+       непозната колона ИЗЦЯЛО. Първо пробваме пълния ред; при грешка
+       повтаряме с базовите колони, за да не губим целия запис. */
+    let { data, error } = await supabaseClient.from("combinations").insert(
+      Object.assign({}, baseRow, {
+        inviter_gender: invite.inviter_gender || null,
+        invitee_gender: profile.gender || null
+      })).select("id").single();
+    if (error){
+      console.warn("[acceptInvite] пълният insert отказа (вероятно неприложена v1.11 миграция), опит с базови колони:", error.message);
+      ({ data, error } = await supabaseClient.from("combinations").insert(baseRow).select("id").single());
+    }
     if (data) combinationRowId = data.id;
   } catch(e){}
 
@@ -8213,7 +8289,16 @@ async function finalizeContextualResult(combo, context, relationshipDetail){
   const reading = generateContextualReading(comboResult, context, profileA, profileB, viewerGender);
 
   if (supabaseClient && combinationRowId){
-    try { await supabaseClient.from("combinations").update({ context, relationship_detail: relationshipDetail || null }).eq("id", combinationRowId); }
+    try {
+      /* v1.15: relationship_detail колоната може да липсва live (v1.11
+         миграция) — при отказ повтаряме само с context, за да не губим
+         и него (PostgREST отхвърля целия update при непозната колона). */
+      const { error } = await supabaseClient.from("combinations")
+        .update({ context, relationship_detail: relationshipDetail || null }).eq("id", combinationRowId);
+      if (error){
+        await supabaseClient.from("combinations").update({ context }).eq("id", combinationRowId);
+      }
+    }
     catch(e){}
   }
 
@@ -8533,19 +8618,42 @@ function retroIconSVG(size = 24, animate = true, idSuffix = "x"){
      е първичен — заместваме само при реално по-нов updated_at. */
   loadProfileFromCloud(profile.id).then(cloud => {
     if (!cloud || !cloud.natal_chart) return;
+
+    /* v1.15 БЪГ ФИКС (аватар изчезва при рефреш): възстановяването на
+       аватара беше СЛЕД cloudNewer гейта — при локално по-нов профил
+       (обичайният случай след всяка локална редакция) ранният return
+       пропускаше setLocalAvatar завинаги. Ако localStorage е загубил
+       AVATAR_KEY (Safari ITP, чистене, частен режим), снимката
+       изчезваше необратимо ВЪПРЕКИ че стои в облака. Затова: аватарът
+       се възстановява ВИНАГИ когато локално липсва, независимо чий
+       профил е по-нов. */
+    const restoredAvatar = !getLocalAvatar() && cloud.avatar;
+    if (restoredAvatar) setLocalAvatar(cloud.avatar);
+
     const cloudNewer = cloud.updated_at && (!profile.updatedAt || new Date(cloud.updated_at) > new Date(profile.updatedAt));
-    if (!cloudNewer) return;
-    saveLocalProfile({
-      id: cloud.id, name: cloud.display_name, gender: cloud.gender || null, email: cloud.email || null,
-      birthDate: cloud.birth_date,
-      birthTime: cloud.birth_time || "", timeKnown: !!cloud.birth_time,
-      city: cloud.birth_city, lat: Number(cloud.birth_lat), lon: Number(cloud.birth_lon),
-      chart: cloud.natal_chart, updatedAt: cloud.updated_at
-    });
-    /* Аватарът е отделен localStorage ключ — възстановяваме и него от
-       облака, когато той пази по-нов профил (напр. друго устройство). */
-    if (cloud.avatar) setLocalAvatar(cloud.avatar);
-    if (typeof renderProfileDossier === "function") renderProfileDossier();
+    if (cloudNewer){
+      saveLocalProfile({
+        id: cloud.id, name: cloud.display_name, gender: cloud.gender || null, email: cloud.email || null,
+        birthDate: cloud.birth_date,
+        birthTime: cloud.birth_time || "", timeKnown: !!cloud.birth_time,
+        city: cloud.birth_city, lat: Number(cloud.birth_lat), lon: Number(cloud.birth_lon),
+        chart: cloud.natal_chart, updatedAt: cloud.updated_at
+      });
+      /* По-новият облачен профил носи и своя аватар (напр. сменен от
+         друго устройство) — той бие локалния. */
+      if (cloud.avatar) setLocalAvatar(cloud.avatar);
+    }
+
+    if (cloudNewer || restoredAvatar){
+      /* v1.15 БЪГ ФИКС (втора половина): наталният екран „ДНК" рендерира
+         аватара си ЕДНОКРАТНО при зареждане (преди този async отговор)
+         и оставаше със стар placeholder, докато „Връзки" се пре-рендерира
+         при всяко влизане — точно докладваният симптом „вижда се само
+         във Връзки". Опресняваме всичко, което показва аватар. */
+      if (typeof natalSyncFromStorage === "function") natalSyncFromStorage();
+      if (typeof renderProfilePairs === "function") renderProfilePairs();
+      if (typeof renderProfileDossier === "function") renderProfileDossier();
+    }
   });
 })();
 </script>

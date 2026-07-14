@@ -109,6 +109,8 @@ CREATE POLICY "Update combination" ON combinations FOR UPDATE USING (true);
 -- МИГРАЦИЯ v1.10 · Аватар (снимка на потребителя)
 -- Съхранява се като Base64 data URL (~100px JPEG, качество 0.7).
 -- Идемпотентен блок — безопасен за повторно изпълнение.
+-- ПРИЛОЖЕНА към живата база (верифицирано на 14.07.2026 през
+-- Supabase MCP list_tables — колоната profiles.avatar съществува).
 -- ============================================================
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar TEXT;
 
@@ -121,6 +123,12 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar TEXT;
 -- "father", "brother", "sister", "child", "grandparent", "kum",
 -- "other") — попълва се само когато context е "family", иначе NULL.
 -- Идемпотентен блок — безопасен за повторно изпълнение.
+-- ⚠ НЕ Е ПРИЛОЖЕНА към живата база към 14.07.2026 (верифицирано през
+-- MCP list_tables; опитът за apply_migration прекъсна при разпад на
+-- връзката). Кодът (v1.15) деградира устойчиво: insert/update без
+-- тези колони при отказ. Пусни блока ръчно в SQL Editor при първа
+-- възможност, за да заработят родовата корекция и под-типът
+-- на семейната връзка между устройства.
 -- ============================================================
 ALTER TABLE combinations ADD COLUMN IF NOT EXISTS inviter_gender TEXT;
 ALTER TABLE combinations ADD COLUMN IF NOT EXISTS invitee_gender TEXT;
