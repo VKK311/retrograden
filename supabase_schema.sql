@@ -123,12 +123,10 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar TEXT;
 -- "father", "brother", "sister", "child", "grandparent", "kum",
 -- "other") — попълва се само когато context е "family", иначе NULL.
 -- Идемпотентен блок — безопасен за повторно изпълнение.
--- ⚠ НЕ Е ПРИЛОЖЕНА към живата база към 14.07.2026 (верифицирано през
--- MCP list_tables; опитът за apply_migration прекъсна при разпад на
--- връзката). Кодът (v1.15) деградира устойчиво: insert/update без
--- тези колони при отказ. Пусни блока ръчно в SQL Editor при първа
--- възможност, за да заработят родовата корекция и под-типът
--- на семейната връзка между устройства.
+-- ПРИЛОЖЕНА към живата база на 14.07.2026 (през Supabase MCP,
+-- верифицирано с list_tables — трите колони съществуват). Кодът
+-- (v1.15) остава устойчив на липсата им за инсталации от по-стар
+-- дъмп: insert/update се повтарят без новите колони при отказ.
 -- ============================================================
 ALTER TABLE combinations ADD COLUMN IF NOT EXISTS inviter_gender TEXT;
 ALTER TABLE combinations ADD COLUMN IF NOT EXISTS invitee_gender TEXT;
